@@ -11,14 +11,14 @@ const argv = yargs(hideBin(process.argv))
         description: 'Base URL of the CSS',
         demandOption: true
     })
-    .option('count', {
-        alias: 'c',
+    .option('fetchCount', {
+        alias: 'fc',
         type: 'number',
         description: 'Number of fetches per user',
         demandOption: true,
     })
-    .option('users', {
-        alias: 'u',
+    .option('userCount', {
+        alias: 'uc',
         type: 'number',
         description: 'Number of users',
         demandOption: true,
@@ -48,8 +48,8 @@ async function fetchPodFile(account: string, podFileRelative: string) {
 }
 
 async function main() {
-    const userCount = argv.users || 1;
-    const fetchCount = argv.count || 1;
+    const userCount = argv.userCount || 1;
+    const fetchCount = argv.fetchCount || 1;
     const promises = [];
     for (let i = 0; i < fetchCount; i++) {
         for (let j = 0; j < userCount; j++) {
