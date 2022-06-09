@@ -30,7 +30,7 @@ const cssBaseUrl = argv.url.endsWith('/') ? argv.url : argv.url+'/';
 
 
 async function fetchPodFile(account: string, podFileRelative: string) {
-    console.log(`   Will fetch file from account ${account}, pod path "${podFileRelative}"`);
+    // console.log(`   Will fetch file from account ${account}, pod path "${podFileRelative}"`);
 
     const res = await fetch(`${cssBaseUrl}${account}/${podFileRelative}`, {
         method: 'GET',
