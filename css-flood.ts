@@ -58,7 +58,7 @@ async function main() {
         }
     }
     console.log(`Fetching ${fetchCount} files from ${userCount} users...`);
-    await Promise.all(promises);
+    await Promise.allSettled(promises);
     console.log(`All fetches completed.`);
 }
 
