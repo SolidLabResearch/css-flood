@@ -1,0 +1,35 @@
+{
+  "name": "css-flood",
+  "version": "1.0.0",
+  "description": "Tool to flood the Community Solid Server with requests, for testing purposes.",
+  "type": "module",
+  "bin": {
+    "css-flood": "./css-flood.ts"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "ts-node css-flood.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SolidLabInfra/css-flood.git"
+  },
+  "keywords": [
+    "solid"
+  ],
+  "author": "Wim Van de Meerssche",
+  "license": "TODO",
+  "bugs": {
+    "url": "https://github.com/SolidLabInfra/css-flood/issues"
+  },
+  "homepage": "https://github.com/SolidLabInfra/css-flood#readme",
+  "dependencies": {
+    "node-fetch": "^3.2.0",
+    "yargs": "^17.3.1"
+  },
+  "devDependencies": {
+    "@types/yargs": "^17.0.10",
+    "ts-node": "^10.8.1",
+    "typescript": "^4.7.3"
+  }
+}
