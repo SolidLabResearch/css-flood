@@ -17,6 +17,13 @@ const argv = yargs(hideBin(process.argv))
         description: 'Number of fetches per user',
         demandOption: true,
     })
+    .option('parallel', {
+        alias: 'pc',
+        type: 'number',
+        description: 'Number of fetches in parallel',
+        demandOption: false,
+        default: 10,
+    })
     .option('userCount', {
         alias: 'uc',
         type: 'number',
@@ -47,17 +54,34 @@ async function fetchPodFile(account: string, podFileRelative: string) {
     }
 }
 
+async function awaitUntilEmpty(actionPromiseFactory: (() => Promise<void>)[]) {
+    while (true) {
+        const actionMaker = actionPromiseFactory.pop();
+        if (!actionMaker) {
+            break;
+        }
+        const action = actionMaker();
+        await action;
+    }
+}
+
 async function main() {
     const userCount = argv.userCount || 1;
     const fetchCount = argv.fetchCount || 1;
+    const parallel = argv.parallel || 10;
+    const requests = [];
     const promises = [];
     for (let i = 0; i < fetchCount; i++) {
         for (let j = 0; j < userCount; j++) {
             const account = `user${j}`;
-            promises.push(fetchPodFile(account, 'dummy.txt'));
+            requests.push(() => fetchPodFile(account, 'dummy.txt'));
+            // promises.push(fetchPodFile(account, 'dummy.txt'));
         }
     }
-    console.log(`Fetching ${fetchCount} files from ${userCount} users...`);
+    for (let p = 0; p < parallel; p++) {
+        promises.push(awaitUntilEmpty(requests));
+    }
+    console.log(`Fetching ${fetchCount} files from ${userCount} users. Max ${parallel} parallel requests...`);
     await Promise.allSettled(promises);
     console.log(`All fetches completed.`);
 }
