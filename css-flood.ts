@@ -30,11 +30,17 @@ const argv = yargs(hideBin(process.argv))
         description: 'Number of users',
         demandOption: true,
     })
+    .option('filename', {
+        alias: 'f',
+        type: 'string',
+        description: 'File to download from pod',
+        default: 'dummy.txt',
+    })
     .help()
     .parseSync();
 
 const cssBaseUrl = argv.url.endsWith('/') ? argv.url : argv.url+'/';
-
+const podFilename = argv.filename;
 
 async function fetchPodFile(account: string, podFileRelative: string) {
     // console.log(`   Will fetch file from account ${account}, pod path "${podFileRelative}"`);
@@ -74,7 +80,7 @@ async function main() {
     for (let i = 0; i < fetchCount; i++) {
         for (let j = 0; j < userCount; j++) {
             const account = `user${j}`;
-            requests.push(() => fetchPodFile(account, 'dummy.txt'));
+            requests.push(() => fetchPodFile(account, podFilename));
             // promises.push(fetchPodFile(account, 'dummy.txt'));
         }
     }
