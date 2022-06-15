@@ -57,6 +57,7 @@ async function fetchPodFile(account: string, podFileRelative: string) {
 
     const res = await fetch(`${cssBaseUrl}${account}/${podFileRelative}`, {
         method: 'GET',
+        signal: AbortSignal.timeout(4_000),  // abort after 5 seconds //supported in nodejs>=17.3
     });
 
     // console.log(`res.ok`, res.ok);
@@ -112,7 +113,15 @@ async function main() {
             return fetchPodFile(account, podFilename);
         };
         for (let p = 0; p < parallel; p++) {
-            promises.push(awaitUntilDeadline(requestMaker, start, durationMillis));
+            promises.push(
+                Promise.race([
+                        awaitUntilDeadline(requestMaker, start, durationMillis),
+                        new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('timeout')), durationMillis+5_000)
+                        )
+                    ]
+                )
+            )
         }
         console.log(`Fetching files from ${userCount} users. Max ${parallel} parallel requests. Will stop after ${duration} seconds...`);
         await Promise.allSettled(promises);
