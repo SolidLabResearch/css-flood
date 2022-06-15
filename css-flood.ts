@@ -57,7 +57,10 @@ async function fetchPodFile(account: string, podFileRelative: string) {
 
     const res = await fetch(`${cssBaseUrl}${account}/${podFileRelative}`, {
         method: 'GET',
-        signal: AbortSignal.timeout(4_000),  // abort after 5 seconds //supported in nodejs>=17.3
+        //open bug in nodejs typescript that AbortSignal.timeout doesn't work
+        //  see https://github.com/node-fetch/node-fetch/issues/741
+        // @ts-ignore
+        signal: AbortSignal.timeout(4_000),  // abort after 4 seconds //supported in nodejs>=17.3
     });
 
     // console.log(`res.ok`, res.ok);
