@@ -52,9 +52,19 @@ const argv = yargs(hideBin(process.argv))
 const cssBaseUrl = argv.url.endsWith('/') ? argv.url : argv.url+'/';
 const podFilename = argv.filename;
 
-async function fetchPodFile(account: string, podFileRelative: string) {
+
+class Counter {
+    total: number = 0;
+    success: number = 0;
+    failure: number = 0;
+}
+
+async function fetchPodFile(account: string, podFileRelative: string, counter?: Counter) {
     // console.log(`   Will fetch file from account ${account}, pod path "${podFileRelative}"`);
 
+    if (counter) {
+        counter.total++;
+    }
     const res = await fetch(`${cssBaseUrl}${account}/${podFileRelative}`, {
         method: 'GET',
         //open bug in nodejs typescript that AbortSignal.timeout doesn't work
@@ -65,13 +75,23 @@ async function fetchPodFile(account: string, podFileRelative: string) {
 
     // console.log(`res.ok`, res.ok);
     // console.log(`res.status`, res.status);
-    const body = await res.text();
-    // console.log(`res.text`, body);
-    if (!res.ok) {
-        const errorMessage = `${res.status} - Fetching from account ${account}, pod path "${podFileRelative}" failed: ${body}`
-        console.error(errorMessage);
-        throw new Error(errorMessage);
+    try {
+        const body = await res.text();
+
+        if (!res.ok) {
+            const errorMessage = `${res.status} - Fetching from account ${account}, pod path "${podFileRelative}" failed: ${body}`
+            console.error(errorMessage);
+            throw new Error(errorMessage);
+        }
+        if (counter) {
+            counter.success++;
+        }
+    } catch (e) {
+        if (counter) {
+            counter.failure++;
+        }
     }
+    // console.log(`res.text`, body);
 }
 
 async function awaitUntilEmpty(actionPromiseFactory: (() => Promise<void>)[]) {
@@ -99,21 +119,20 @@ async function main() {
     const duration = argv.duration;
     const requests = [];
     const promises = [];
+    let counter = new Counter();
     if (duration) {
         const durationMillis = duration * 1000;
         const start = Date.now();
 
         //Execute as many fetches as needed to fill the requested time.
         let curUserId = 0;
-        let fetchCount = 0;
         const requestMaker = () => {
             const userId = curUserId++;
             if (curUserId >= userCount) {
                 curUserId = 0;
             }
             const account = `user${userId}`;
-            fetchCount++;
-            return fetchPodFile(account, podFilename);
+            return fetchPodFile(account, podFilename, counter);
         };
         for (let p = 0; p < parallel; p++) {
             promises.push(
@@ -128,13 +147,13 @@ async function main() {
         }
         console.log(`Fetching files from ${userCount} users. Max ${parallel} parallel requests. Will stop after ${duration} seconds...`);
         await Promise.allSettled(promises);
-        console.log(`All fetches completed: count=${fetchCount}`);
+        console.log(`All fetches completed after ${(Date.now() - start) / 1000.0} seconds.`);
     } else {
         //Execute all requested fetches, no matter how long it takes.
         for (let i = 0; i < fetchCount; i++) {
             for (let j = 0; j < userCount; j++) {
                 const account = `user${j}`;
-                requests.push(() => fetchPodFile(account, podFilename));
+                requests.push(() => fetchPodFile(account, podFilename, counter));
                 // promises.push(fetchPodFile(account, 'dummy.txt'));
             }
         }
@@ -145,6 +164,7 @@ async function main() {
         await Promise.allSettled(promises);
         console.log(`All fetches completed.`);
     }
+    console.log(`Fetch Statistics: total=${counter.total} success=${counter.success} failure=${counter.failure}`);
 }
 
 try {
