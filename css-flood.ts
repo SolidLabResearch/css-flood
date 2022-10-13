@@ -52,44 +52,47 @@ const argv = yargs(hideBin(process.argv))
 const cssBaseUrl = argv.url.endsWith('/') ? argv.url : argv.url+'/';
 const podFilename = argv.filename;
 
+interface StatusNumberInfo {
+  [status: number]: number;
+}
 
 class Counter {
     total: number = 0;
     success: number = 0;
     failure: number = 0;
+    exceptions: number = 0;
+    statuses: StatusNumberInfo = {};
 }
 
-async function fetchPodFile(account: string, podFileRelative: string, counter?: Counter) {
+async function fetchPodFile(account: string, podFileRelative: string, counter: Counter) {
     // console.log(`   Will fetch file from account ${account}, pod path "${podFileRelative}"`);
-
-    if (counter) {
-        counter.total++;
-    }
-    const res = await fetch(`${cssBaseUrl}${account}/${podFileRelative}`, {
-        method: 'GET',
-        //open bug in nodejs typescript that AbortSignal.timeout doesn't work
-        //  see https://github.com/node-fetch/node-fetch/issues/741
-        // @ts-ignore
-        signal: AbortSignal.timeout(4_000),  // abort after 4 seconds //supported in nodejs>=17.3
-    });
+    counter.total++;
+    try {
+        const res = await fetch(`${cssBaseUrl}${account}/${podFileRelative}`, {
+            method: 'GET',
+            //open bug in nodejs typescript that AbortSignal.timeout doesn't work
+            //  see https://github.com/node-fetch/node-fetch/issues/741
+            // @ts-ignore
+            signal: AbortSignal.timeout(4_000),  // abort after 4 seconds //supported in nodejs>=17.3
+        });
 
     // console.log(`res.ok`, res.ok);
     // console.log(`res.status`, res.status);
-    try {
         const body = await res.text();
+        counter.statuses[res.status] = (counter.statuses[res.status] || 0) + 1;
 
         if (!res.ok) {
             const errorMessage = `${res.status} - Fetching from account ${account}, pod path "${podFileRelative}" failed: ${body}`
             console.error(errorMessage);
-            throw new Error(errorMessage);
-        }
-        if (counter) {
+            //throw new Error(errorMessage);
+            counter.failure++;
+            return;
+        } else {
             counter.success++;
         }
     } catch (e) {
-        if (counter) {
-            counter.failure++;
-        }
+        counter.exceptions++;
+        counter.failure++;
     }
     // console.log(`res.text`, body);
 }
@@ -154,7 +157,6 @@ async function main() {
             for (let j = 0; j < userCount; j++) {
                 const account = `user${j}`;
                 requests.push(() => fetchPodFile(account, podFilename, counter));
-                // promises.push(fetchPodFile(account, 'dummy.txt'));
             }
         }
         for (let p = 0; p < parallel; p++) {
@@ -164,7 +166,7 @@ async function main() {
         await Promise.allSettled(promises);
         console.log(`All fetches completed.`);
     }
-    console.log(`Fetch Statistics: total=${counter.total} success=${counter.success} failure=${counter.failure}`);
+    console.log(`Fetch Statistics: total=${counter.total} success=${counter.success} failure=${counter.failure} exceptions=${counter.exceptions} statuses=${JSON.stringify(counter.statuses)}`);
 }
 
 try {
