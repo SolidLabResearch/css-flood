@@ -83,7 +83,10 @@ async function fetchPodFile(account: string, podFileRelative: string, counter: C
 
         if (!res.ok) {
             const errorMessage = `${res.status} - Fetching from account ${account}, pod path "${podFileRelative}" failed: ${body}`
-            console.error(errorMessage);
+            if ((counter.failure - counter.exceptions) < 10) {
+                //only log first 10 status failures
+                console.error(errorMessage);
+            }
             //throw new Error(errorMessage);
             counter.failure++;
             return;
@@ -91,6 +94,10 @@ async function fetchPodFile(account: string, podFileRelative: string, counter: C
             counter.success++;
         }
     } catch (e) {
+        if (counter.exceptions < 10) {
+            //only log first 10 exceptions
+            console.error(e);
+        }
         counter.exceptions++;
         counter.failure++;
     }
