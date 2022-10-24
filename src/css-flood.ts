@@ -3,7 +3,7 @@
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import fetch from "node-fetch";
-import { createUserToken, getUserAuthFetch } from "./solid-auth";
+import { createUserToken, getUserAuthFetch } from "./solid-auth.js";
 
 const argv = yargs(hideBin(process.argv))
   .option("url", {
