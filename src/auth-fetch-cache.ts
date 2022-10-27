@@ -1,5 +1,5 @@
 import fetch from "node-fetch";
-import { createUserToken, getUserAuthFetch, UserToken } from "./solid-auth";
+import { createUserToken, getUserAuthFetch, UserToken } from "./solid-auth.js";
 
 export class AuthFetchCache {
   cssBaseUrl: string;
