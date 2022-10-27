@@ -54,6 +54,11 @@ const argv = yargs(hideBin(process.argv))
     description: "Authenticated as the user owning the file",
     default: false,
   })
+  .option("authenticateEach", {
+    type: "boolean",
+    description: "Do authentication for each call, instead of once per user",
+    default: false,
+  })
   .help()
   .parseSync();
 
@@ -139,22 +144,41 @@ async function awaitUntilDeadline(
   }
 }
 
+async function makeUserAuthFetch(userIndex: number) : Promise<typeof fetch> {
+  const account = `user${userIndex}`;
+  const token = await createUserToken(cssBaseUrl, account, "password");
+  return await getUserAuthFetch(cssBaseUrl, account, token);
+}
+
+async function fetchPodFileCaller(userId: number, authenticate: boolean, authFetchers: Array<() => Promise<typeof fetch>>, counter: Counter) : Promise<void> {
+  const account = `user${userId}`;
+  return fetchPodFile(
+      account,
+      podFilename,
+      counter,
+      authenticate ? await authFetchers[userId]() : fetch
+  );
+}
+
 async function main() {
   const userCount = argv.userCount || 1;
   const fetchCount = argv.fetchCount || 1;
   const parallel = argv.parallel || 10;
   const duration = argv.duration;
-  const authenticate = argv.authenticate || false;
+  const authenticateEach = argv.authenticateEach || false;
+  const authenticate = authenticateEach || argv.authenticate || false;
   const requests = [];
   const promises = [];
 
-  const authFetchers: Array<typeof fetch> = [];
+  const authFetchers: Array<() => Promise<typeof fetch>> = [];
   if (authenticate) {
     for (let userIndex = 0; userIndex < userCount; userIndex++) {
-      const account = `user${userIndex}`;
-      const token = await createUserToken(cssBaseUrl, account, "password");
-      const authFetch = await getUserAuthFetch(cssBaseUrl, account, token);
-      authFetchers.push(authFetch);
+      if (authenticateEach) {
+          const authFetch = await makeUserAuthFetch(userIndex);
+          authFetchers.push(() => Promise<typeof fetch>.resolve(authFetch));
+      } else {
+          authFetchers.push(() => makeUserAuthFetch(userIndex));
+      }
     }
   }
 
@@ -171,12 +195,7 @@ async function main() {
         curUserId = 0;
       }
       const account = `user${userId}`;
-      return fetchPodFile(
-        account,
-        podFilename,
-        counter,
-        authenticate ? authFetchers[userId] : fetch
-      );
+      return fetchPodFileCaller(userId, authenticate, authFetchers, counter);
     };
     for (let p = 0; p < parallel; p++) {
       promises.push(
@@ -204,12 +223,7 @@ async function main() {
       for (let j = 0; j < userCount; j++) {
         const account = `user${j}`;
         requests.push(() =>
-          fetchPodFile(
-            account,
-            podFilename,
-            counter,
-            authenticate ? authFetchers[j] : fetch
-          )
+            fetchPodFileCaller(j, authenticate, authFetchers, counter)
         );
       }
     }
