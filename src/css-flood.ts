@@ -1,9 +1,8 @@
-#!/usr/bin/env ts-node
+#!/usr/bin/env node
 
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import fetch from "node-fetch";
-import { createUserToken, getUserAuthFetch } from "./solid-auth.js";
 import { AuthFetchCache } from "./auth-fetch-cache.js";
 
 const argv = yargs(hideBin(process.argv))
