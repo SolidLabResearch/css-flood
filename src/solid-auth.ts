@@ -11,7 +11,7 @@ function accountEmail(account: string): string {
   return `${account}@example.org`;
 }
 
-interface UserToken {
+export interface UserToken {
   id: string;
   secret: string;
 }

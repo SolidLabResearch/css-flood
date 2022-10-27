@@ -4,6 +4,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import fetch from "node-fetch";
 import { createUserToken, getUserAuthFetch } from "./solid-auth.js";
+import { AuthFetchCache } from "./auth-fetch-cache";
 
 const argv = yargs(hideBin(process.argv))
   .option("url", {
@@ -54,10 +55,12 @@ const argv = yargs(hideBin(process.argv))
     description: "Authenticated as the user owning the file",
     default: false,
   })
-  .option("authenticateEach", {
-    type: "boolean",
-    description: "Do authentication for each call, instead of once per user",
-    default: false,
+  .option("authenticateCache", {
+    type: "string",
+    choices: ["none", "token", "all"],
+    description:
+      "For each user, cache all authentication, or only the CSS token, or authenticate fully each time.",
+    default: "all",
   })
   .help()
   .parseSync();
@@ -78,11 +81,13 @@ class Counter {
 }
 
 async function fetchPodFile(
-  account: string,
+  userIndex: number,
   podFileRelative: string,
   counter: Counter,
-  aFetch: typeof fetch
+  authFetchCache: AuthFetchCache
 ) {
+  const account = `user${userIndex}`;
+  const aFetch = await authFetchCache.getAuthFetcher(userIndex);
   // console.log(`   Will fetch file from account ${account}, pod path "${podFileRelative}"`);
   counter.total++;
   try {
@@ -144,42 +149,27 @@ async function awaitUntilDeadline(
   }
 }
 
-async function makeUserAuthFetch(userIndex: number) : Promise<typeof fetch> {
-  const account = `user${userIndex}`;
-  const token = await createUserToken(cssBaseUrl, account, "password");
-  return await getUserAuthFetch(cssBaseUrl, account, token);
-}
-
-async function fetchPodFileCaller(userId: number, authenticate: boolean, authFetchers: Array<() => Promise<typeof fetch>>, counter: Counter) : Promise<void> {
-  const account = `user${userId}`;
-  return fetchPodFile(
-      account,
-      podFilename,
-      counter,
-      authenticate ? await authFetchers[userId]() : fetch
-  );
-}
-
 async function main() {
   const userCount = argv.userCount || 1;
   const fetchCount = argv.fetchCount || 1;
   const parallel = argv.parallel || 10;
   const duration = argv.duration;
-  const authenticateEach = argv.authenticateEach || false;
-  const authenticate = authenticateEach || argv.authenticate || false;
+  // @ts-ignore
+  const authenticateCache: "none" | "token" | "all" =
+    argv.authenticateCache || "all";
+  const authenticate = argv.authenticate || false;
   const requests = [];
   const promises = [];
 
-  const authFetchers: Array<() => Promise<typeof fetch>> = [];
+  const authFetchCache = new AuthFetchCache(
+    cssBaseUrl,
+    authenticate,
+    authenticateCache
+  );
+
+  const authFetchersByUser: Array<() => Promise<typeof fetch>> = [];
   if (authenticate) {
-    for (let userIndex = 0; userIndex < userCount; userIndex++) {
-      if (authenticateEach) {
-          const authFetch = await makeUserAuthFetch(userIndex);
-          authFetchers.push(() => Promise<typeof fetch>.resolve(authFetch));
-      } else {
-          authFetchers.push(() => makeUserAuthFetch(userIndex));
-      }
-    }
+    authFetchCache.preCache(userCount);
   }
 
   let counter = new Counter();
@@ -194,8 +184,7 @@ async function main() {
       if (curUserId >= userCount) {
         curUserId = 0;
       }
-      const account = `user${userId}`;
-      return fetchPodFileCaller(userId, authenticate, authFetchers, counter);
+      return fetchPodFile(userId, podFilename, counter, authFetchCache);
     };
     for (let p = 0; p < parallel; p++) {
       promises.push(
@@ -221,9 +210,8 @@ async function main() {
     //Execute all requested fetches, no matter how long it takes.
     for (let i = 0; i < fetchCount; i++) {
       for (let j = 0; j < userCount; j++) {
-        const account = `user${j}`;
         requests.push(() =>
-            fetchPodFileCaller(j, authenticate, authFetchers, counter)
+          fetchPodFile(j, podFilename, counter, authFetchCache)
         );
       }
     }
