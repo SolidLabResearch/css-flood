@@ -9,6 +9,10 @@ export class AuthFetchCache {
   cssTokensByUser: Array<UserToken | null> = [];
   authFetchersByUser: Array<typeof fetch | null> = [];
 
+  useCount: number = 0;
+  tokenFetchCount: number = 0;
+  authFetchCount: number = 0;
+
   constructor(
     cssBaseUrl: string,
     authenticate: boolean,
@@ -20,6 +24,7 @@ export class AuthFetchCache {
   }
 
   async getAuthFetcher(userId: number): Promise<typeof fetch> {
+    this.useCount++;
     if (!this.authenticate) {
       return fetch;
     }
@@ -39,9 +44,11 @@ export class AuthFetchCache {
 
     if (!token) {
       token = await createUserToken(this.cssBaseUrl, account, "password");
+      this.tokenFetchCount++;
     }
     if (!theFetch) {
       theFetch = await getUserAuthFetch(this.cssBaseUrl, account, token);
+      this.authFetchCount++;
     }
 
     if (this.authenticateCache !== "none" && !this.cssTokensByUser[userId]) {
@@ -67,12 +74,33 @@ export class AuthFetchCache {
           "password"
         );
         this.cssTokensByUser[userIndex] = token;
+        this.tokenFetchCount++;
 
         if (this.authenticateCache === "all") {
           const fetch = await getUserAuthFetch(this.cssBaseUrl, account, token);
           this.authFetchersByUser[userIndex] = fetch;
+          this.authFetchCount++;
         }
       }
     }
+  }
+
+  // cssBaseUrl: string;
+  // authenticateCache: "none" | "token" | "all" = "none";
+  // authenticate: boolean = false;
+  //
+  // cssTokensByUser: Array<UserToken | null> = [];
+  // authFetchersByUser: Array<typeof fetch | null> = [];
+  toString(): string {
+    return `AuthFetchCache{
+                cssBaseUrl=${this.cssBaseUrl}, 
+                authenticateCache=${this.authenticateCache}, 
+                authenticate=${this.authenticate}, 
+                cssTokensByUser.length=${this.cssTokensByUser.length}, 
+                authFetchersByUser.length=${this.authFetchersByUser.length}, 
+                useCount=${this.useCount}, 
+                tokenFetchCount=${this.tokenFetchCount}, 
+                authFetchCount=${this.authFetchCount}
+            }`;
   }
 }

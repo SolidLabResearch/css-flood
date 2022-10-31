@@ -170,6 +170,7 @@ async function main() {
   if (authenticate) {
     authFetchCache.preCache(userCount);
   }
+  console.log(`userCount=${userCount} authFetchCache=${authFetchCache}`);
 
   let counter = new Counter();
   if (duration) {
@@ -223,6 +224,7 @@ async function main() {
     await Promise.allSettled(promises);
     console.log(`All fetches completed.`);
   }
+  console.log(`authFetchCache=${authFetchCache}`);
   console.log(
     `Fetch Statistics: total=${counter.total} success=${
       counter.success
