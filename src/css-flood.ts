@@ -2,8 +2,10 @@
 
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import fetch from "node-fetch";
+import nodeFetch from "node-fetch";
+import { Response as NodeJsResponse } from "node-fetch";
 import { AuthFetchCache } from "./auth-fetch-cache.js";
+import { once } from "events";
 
 const argv = yargs(hideBin(process.argv))
   .option("url", {
@@ -79,6 +81,52 @@ class Counter {
   statuses: StatusNumberInfo = {};
 }
 
+async function discardBodyData(response: NodeJsResponse | Response) {
+  //handles both node-fetch repsonse body (NodeJS.ReadableStream) and ES6 fetch response body (ReadableStream)
+
+  if (!response.body) {
+    console.warn('No response body');
+    return;
+  }
+
+  if (response.body.hasOwnProperty('getReader')) {
+    //ES6 fetch
+
+    // @ts-ignore
+    const body: ReadableStream = response.body;
+
+    const bodyReader = body.getReader();
+    if (bodyReader) {
+      let done = false;
+      while (!done) {
+        //discard data (value)
+        const {done: d, value: _} = await bodyReader.read();
+        done = d;
+      }
+    }
+
+    return;
+  }
+  if (response.body.hasOwnProperty('????')) {
+    //node-fetch
+
+    // @ts-ignore
+    const body: NodeJS.ReadableStream = response.body;
+
+    body.on('readable', () => {
+      let chunk;
+      while (null !== (chunk = body.read())) {
+        //discard data
+      }
+    });
+
+    await once(body, 'end')
+    return;
+  }
+  const _ = await response.text();
+  console.warn('Unknown fetch response body');
+}
+
 async function fetchPodFile(
   userIndex: number,
   podFileRelative: string,
@@ -100,11 +148,11 @@ async function fetchPodFile(
 
     // console.log(`res.ok`, res.ok);
     // console.log(`res.status`, res.status);
-    const body = await res.text();
     counter.statuses[res.status] = (counter.statuses[res.status] || 0) + 1;
 
     if (!res.ok) {
-      const errorMessage = `${res.status} - Fetching from account ${account}, pod path "${podFileRelative}" failed: ${body}`;
+      const bodyError = await res.text();
+      const errorMessage = `${res.status} - Fetching from account ${account}, pod path "${podFileRelative}" failed: ${bodyError}`;
       if (counter.failure - counter.exceptions < 10) {
         //only log first 10 status failures
         console.error(errorMessage);
@@ -113,14 +161,19 @@ async function fetchPodFile(
       counter.failure++;
       return;
     } else {
-      counter.success++;
+      if (res.body) {
+        await discardBodyData(res);
+        counter.success++;
+      } else {
+        console.warn("successful fetch, but no body!");
+        counter.exceptions++;
+      }
     }
   } catch (e) {
     if (counter.exceptions < 10) {
       //only log first 10 exceptions
       console.error(e);
     }
-    counter.exceptions++;
     counter.failure++;
   }
   // console.log(`res.text`, body);
@@ -166,7 +219,7 @@ async function main() {
     authenticateCache
   );
 
-  const authFetchersByUser: Array<() => Promise<typeof fetch>> = [];
+  const authFetchersByUser: Array<() => Promise<typeof nodeFetch>> = [];
   if (authenticate) {
     authFetchCache.preCache(userCount);
   }
