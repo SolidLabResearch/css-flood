@@ -73,23 +73,56 @@ interface StatusNumberInfo {
   [status: number]: number;
 }
 
+function min(a: number, b: number): number {
+  return a > b ? b : a;
+}
+function max(a: number, b: number): number {
+  return a < b ? b : a;
+}
+
+class DurationCounter {
+  min: number = 0;
+  max: number = 0;
+  sum: number = 0;
+  count: number = 0;
+
+  addDuration(duration: number) {
+    if (this.count === 0) {
+      this.min = duration;
+      this.max = duration;
+    }
+
+    this.count++;
+    this.sum += duration;
+
+    this.min = min(duration, this.min);
+    this.min = max(duration, this.max);
+  }
+
+  avg(): number {
+    return this.sum / this.count;
+  }
+}
+
 class Counter {
   total: number = 0;
   success: number = 0;
   failure: number = 0;
   exceptions: number = 0;
   statuses: StatusNumberInfo = {};
+
+  success_duration_ms = new DurationCounter();
 }
 
 async function discardBodyData(response: NodeJsResponse | Response) {
   //handles both node-fetch repsonse body (NodeJS.ReadableStream) and ES6 fetch response body (ReadableStream)
 
   if (!response.body) {
-    console.warn('No response body');
+    console.warn("No response body");
     return;
   }
 
-  if (response.body.hasOwnProperty('getReader')) {
+  if (response.body.hasOwnProperty("getReader")) {
     //ES6 fetch
 
     // @ts-ignore
@@ -100,31 +133,31 @@ async function discardBodyData(response: NodeJsResponse | Response) {
       let done = false;
       while (!done) {
         //discard data (value)
-        const {done: d, value: _} = await bodyReader.read();
+        const { done: d, value: _ } = await bodyReader.read();
         done = d;
       }
     }
 
     return;
   }
-  if (response.body.hasOwnProperty('????')) {
+  if (response.body.hasOwnProperty("on")) {
     //node-fetch
 
     // @ts-ignore
     const body: NodeJS.ReadableStream = response.body;
 
-    body.on('readable', () => {
+    body.on("readable", () => {
       let chunk;
       while (null !== (chunk = body.read())) {
         //discard data
       }
     });
 
-    await once(body, 'end')
+    await once(body, "end");
     return;
   }
   const _ = await response.text();
-  console.warn('Unknown fetch response body');
+  console.warn("Unknown fetch response body");
 }
 
 async function fetchPodFile(
@@ -138,6 +171,7 @@ async function fetchPodFile(
   // console.log(`   Will fetch file from account ${account}, pod path "${podFileRelative}"`);
   counter.total++;
   try {
+    const startedFetch = new Date().getTime();
     const res = await aFetch(`${cssBaseUrl}${account}/${podFileRelative}`, {
       method: "GET",
       //open bug in nodejs typescript that AbortSignal.timeout doesn't work
@@ -145,7 +179,6 @@ async function fetchPodFile(
       // @ts-ignore
       signal: AbortSignal.timeout(4_000), // abort after 4 seconds //supported in nodejs>=17.3
     });
-
     // console.log(`res.ok`, res.ok);
     // console.log(`res.status`, res.status);
     counter.statuses[res.status] = (counter.statuses[res.status] || 0) + 1;
@@ -163,7 +196,10 @@ async function fetchPodFile(
     } else {
       if (res.body) {
         await discardBodyData(res);
+        const stoppedFetch = new Date().getTime(); //this method of timing is flawed for async!
+        //Because you can't accurately time async calls. (But the inaccuracies are probably neglectable.)
         counter.success++;
+        counter.success_duration_ms.addDuration(stoppedFetch - startedFetch);
       } else {
         console.warn("successful fetch, but no body!");
         counter.exceptions++;
@@ -284,6 +320,12 @@ async function main() {
     } failure=${counter.failure} exceptions=${
       counter.exceptions
     } statuses=${JSON.stringify(counter.statuses)}`
+  );
+  //print stats, but warn that the method is flawed: you can't accurately time async calls. (But the inaccuracies are probably neglectable.)
+  console.log(
+    `Fetch Duration Statistics: min=${counter.success_duration_ms.min} max=${
+      counter.success_duration_ms.max
+    } avg=${counter.success_duration_ms.avg()} (flawed method!)`
   );
 }
 
