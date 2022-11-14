@@ -6,6 +6,7 @@ import nodeFetch from "node-fetch";
 import { Response as NodeJsResponse } from "node-fetch";
 import { AuthFetchCache } from "./auth-fetch-cache.js";
 import { once } from "events";
+import { AnyFetchResponseType, AnyFetchType, es6fetch } from "./generic-fetch";
 
 const argv = yargs(hideBin(process.argv))
   .option("url", {
@@ -62,6 +63,11 @@ const argv = yargs(hideBin(process.argv))
     description:
       "For each user, cache all authentication, or only the CSS token, or authenticate fully each time.",
     default: "all",
+  })
+  .option("useNodeFetch", {
+    type: "boolean",
+    description: "Use node-fetch instead of ES6 fetch",
+    default: false,
   })
   .help()
   .parseSync();
@@ -140,7 +146,7 @@ async function discardBodyData(response: NodeJsResponse | Response) {
 
     return;
   }
-  if (response.body.hasOwnProperty("on")) {
+  if (response.body.hasOwnProperty("_eventsCount")) {
     //node-fetch
 
     // @ts-ignore
@@ -172,13 +178,16 @@ async function fetchPodFile(
   counter.total++;
   try {
     const startedFetch = new Date().getTime();
-    const res = await aFetch(`${cssBaseUrl}${account}/${podFileRelative}`, {
-      method: "GET",
-      //open bug in nodejs typescript that AbortSignal.timeout doesn't work
-      //  see https://github.com/node-fetch/node-fetch/issues/741
-      // @ts-ignore
-      signal: AbortSignal.timeout(4_000), // abort after 4 seconds //supported in nodejs>=17.3
-    });
+    const res: AnyFetchResponseType = await aFetch(
+      `${cssBaseUrl}${account}/${podFileRelative}`,
+      {
+        method: "GET",
+        //open bug in nodejs typescript that AbortSignal.timeout doesn't work
+        //  see https://github.com/node-fetch/node-fetch/issues/741
+        // @ts-ignore
+        signal: AbortSignal.timeout(4_000), // abort after 4 seconds //supported in nodejs>=17.3
+      }
+    );
     // console.log(`res.ok`, res.ok);
     // console.log(`res.status`, res.status);
     counter.statuses[res.status] = (counter.statuses[res.status] || 0) + 1;
@@ -246,18 +255,22 @@ async function main() {
   const authenticateCache: "none" | "token" | "all" =
     argv.authenticateCache || "all";
   const authenticate = argv.authenticate || false;
+  const useNodeFetch = argv.useNodeFetch || false;
   const requests = [];
   const promises = [];
+
+  const fetcher: AnyFetchType = useNodeFetch ? nodeFetch : es6fetch;
 
   const authFetchCache = new AuthFetchCache(
     cssBaseUrl,
     authenticate,
-    authenticateCache
+    authenticateCache,
+    fetcher
   );
 
-  const authFetchersByUser: Array<() => Promise<typeof nodeFetch>> = [];
+  const authFetchersByUser: Array<() => Promise<AnyFetchType>> = [];
   if (authenticate) {
-    authFetchCache.preCache(userCount);
+    await authFetchCache.preCache(userCount);
   }
   console.log(`userCount=${userCount} authFetchCache=${authFetchCache}`);
 

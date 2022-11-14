@@ -1,5 +1,5 @@
-import fetch from "node-fetch";
 import { createUserToken, getUserAuthFetch, UserToken } from "./solid-auth.js";
+import { AnyFetchResponseType, AnyFetchType, es6fetch } from "./generic-fetch";
 
 export class AuthFetchCache {
   cssBaseUrl: string;
@@ -7,26 +7,30 @@ export class AuthFetchCache {
   authenticate: boolean = false;
 
   cssTokensByUser: Array<UserToken | null> = [];
-  authFetchersByUser: Array<typeof fetch | null> = [];
+  authFetchersByUser: Array<AnyFetchType | null> = [];
 
   useCount: number = 0;
   tokenFetchCount: number = 0;
   authFetchCount: number = 0;
 
+  fetcher: AnyFetchType;
+
   constructor(
     cssBaseUrl: string,
     authenticate: boolean,
-    authenticateCache: "none" | "token" | "all"
+    authenticateCache: "none" | "token" | "all",
+    fetcher: AnyFetchType = es6fetch
   ) {
     this.cssBaseUrl = cssBaseUrl;
     this.authenticate = authenticate;
     this.authenticateCache = authenticateCache;
+    this.fetcher = fetcher;
   }
 
-  async getAuthFetcher(userId: number): Promise<typeof fetch> {
+  async getAuthFetcher(userId: number): Promise<AnyFetchType> {
     this.useCount++;
     if (!this.authenticate) {
-      return fetch;
+      return this.fetcher;
     }
     const account = `user${userId}`;
     let token = null;
@@ -43,11 +47,21 @@ export class AuthFetchCache {
     }
 
     if (!token) {
-      token = await createUserToken(this.cssBaseUrl, account, "password");
+      token = await createUserToken(
+        this.cssBaseUrl,
+        account,
+        "password",
+        this.fetcher
+      );
       this.tokenFetchCount++;
     }
     if (!theFetch) {
-      theFetch = await getUserAuthFetch(this.cssBaseUrl, account, token);
+      theFetch = await getUserAuthFetch(
+        this.cssBaseUrl,
+        account,
+        token,
+        this.fetcher
+      );
       this.authFetchCount++;
     }
 
@@ -71,13 +85,19 @@ export class AuthFetchCache {
         const token = await createUserToken(
           this.cssBaseUrl,
           account,
-          "password"
+          "password",
+          this.fetcher
         );
         this.cssTokensByUser[userIndex] = token;
         this.tokenFetchCount++;
 
         if (this.authenticateCache === "all") {
-          const fetch = await getUserAuthFetch(this.cssBaseUrl, account, token);
+          const fetch = await getUserAuthFetch(
+            this.cssBaseUrl,
+            account,
+            token,
+            this.fetcher
+          );
           this.authFetchersByUser[userIndex] = fetch;
           this.authFetchCount++;
         }

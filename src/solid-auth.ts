@@ -1,4 +1,4 @@
-import fetch from "node-fetch";
+import nodeFetch from "node-fetch";
 import { Response, BodyInit } from "node-fetch";
 import {
   buildAuthenticatedFetch,
@@ -6,6 +6,7 @@ import {
   generateDpopKeyPair,
 } from "@inrupt/solid-client-authn-core";
 import { ResponseError } from "./error.js";
+import { AnyFetchResponseType, AnyFetchType } from "./generic-fetch";
 
 function accountEmail(account: string): string {
   return `${account}@example.org`;
@@ -18,10 +19,11 @@ export interface UserToken {
 export async function createUserToken(
   cssBaseUrl: string,
   account: string,
-  password: string
+  password: string,
+  fetcher: AnyFetchType = fetch
 ): Promise<UserToken> {
   //see https://github.com/CommunitySolidServer/CommunitySolidServer/blob/main/documentation/markdown/usage/client-credentials.md
-  const res = await fetch(`${cssBaseUrl}idp/credentials/`, {
+  const res = await fetcher(`${cssBaseUrl}idp/credentials/`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -49,8 +51,9 @@ export async function createUserToken(
 export async function getUserAuthFetch(
   cssBaseUrl: string,
   account: string,
-  token: UserToken
-): Promise<typeof fetch> {
+  token: UserToken,
+  fetcher: AnyFetchType = fetch
+): Promise<AnyFetchType> {
   //see https://github.com/CommunitySolidServer/CommunitySolidServer/blob/main/documentation/markdown/usage/client-credentials.md
   const { id, secret } = token;
 
@@ -58,7 +61,7 @@ export async function getUserAuthFetch(
   const authString = `${encodeURIComponent(id)}:${encodeURIComponent(secret)}`;
 
   const url = `${cssBaseUrl}.oidc/token`; //ideally, fetch this from token_endpoint in .well-known/openid-configuration
-  const res = await fetch(url, {
+  const res = await fetcher(url, {
     method: "POST",
     headers: {
       authorization: `Basic ${Buffer.from(authString).toString("base64")}`,
@@ -82,10 +85,9 @@ export async function getUserAuthFetch(
   }
 
   const { access_token: accessToken, expires_in: expiresIn } = JSON.parse(body);
-  // @ts-ignore   buildAuthenticatedFetch uses js fetch, but we use node-fetch
-  const authFetch: typeof fetch = await buildAuthenticatedFetch(
-    // @ts-ignore   buildAuthenticatedFetch uses js fetch, but we use node-fetch
-    fetch,
+  const authFetch: AnyFetchType = await buildAuthenticatedFetch(
+    // @ts-ignore
+    fetcher,
     accessToken,
     { dpopKey }
   );
