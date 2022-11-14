@@ -1,12 +1,10 @@
-import nodeFetch from "node-fetch";
-import { Response, BodyInit } from "node-fetch";
 import {
   buildAuthenticatedFetch,
   createDpopHeader,
   generateDpopKeyPair,
 } from "@inrupt/solid-client-authn-core";
 import { ResponseError } from "./error.js";
-import { AnyFetchResponseType, AnyFetchType } from "./generic-fetch";
+import { AnyFetchResponseType, AnyFetchType } from "./generic-fetch.js";
 
 function accountEmail(account: string): string {
   return `${account}@example.org`;

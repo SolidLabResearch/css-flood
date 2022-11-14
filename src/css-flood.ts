@@ -6,7 +6,11 @@ import nodeFetch from "node-fetch";
 import { Response as NodeJsResponse } from "node-fetch";
 import { AuthFetchCache } from "./auth-fetch-cache.js";
 import { once } from "events";
-import { AnyFetchResponseType, AnyFetchType, es6fetch } from "./generic-fetch";
+import {
+  AnyFetchResponseType,
+  AnyFetchType,
+  es6fetch,
+} from "./generic-fetch.js";
 
 const argv = yargs(hideBin(process.argv))
   .option("url", {

@@ -1,4 +1,4 @@
-import { AnyFetchResponseType } from "./generic-fetch";
+import { AnyFetchResponseType } from "./generic-fetch.js";
 
 export class ResponseError extends Error {
   constructor(response: AnyFetchResponseType, responseBody: string) {

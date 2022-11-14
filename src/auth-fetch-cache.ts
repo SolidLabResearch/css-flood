@@ -1,5 +1,9 @@
 import { createUserToken, getUserAuthFetch, UserToken } from "./solid-auth.js";
-import { AnyFetchResponseType, AnyFetchType, es6fetch } from "./generic-fetch";
+import {
+  AnyFetchResponseType,
+  AnyFetchType,
+  es6fetch,
+} from "./generic-fetch.js";
 
 export class AuthFetchCache {
   cssBaseUrl: string;
