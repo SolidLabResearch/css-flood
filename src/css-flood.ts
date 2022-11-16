@@ -11,6 +11,7 @@ import {
   AnyFetchType,
   es6fetch,
 } from "./generic-fetch.js";
+import { DurationCounter } from "./duration-counter.js";
 
 const argv = yargs(hideBin(process.argv))
   .option("url", {
@@ -81,37 +82,6 @@ const podFilename = argv.filename;
 
 interface StatusNumberInfo {
   [status: number]: number;
-}
-
-function min(a: number, b: number): number {
-  return a > b ? b : a;
-}
-function max(a: number, b: number): number {
-  return a < b ? b : a;
-}
-
-class DurationCounter {
-  min: number = 0;
-  max: number = 0;
-  sum: number = 0;
-  count: number = 0;
-
-  addDuration(duration: number) {
-    if (this.count === 0) {
-      this.min = duration;
-      this.max = duration;
-    }
-
-    this.count++;
-    this.sum += duration;
-
-    this.min = min(duration, this.min);
-    this.min = max(duration, this.max);
-  }
-
-  avg(): number {
-    return this.sum / this.count;
-  }
 }
 
 class Counter {
@@ -276,9 +246,46 @@ async function main() {
   if (authenticate) {
     await authFetchCache.preCache(userCount);
   }
+
   console.log(`userCount=${userCount} authFetchCache=${authFetchCache}`);
 
   let counter = new Counter();
+  const printFinal = function () {
+    console.log(`authFetchCache=${authFetchCache}`);
+    console.log(
+      `Fetch Statistics: total=${counter.total} success=${
+        counter.success
+      } failure=${counter.failure} exceptions=${
+        counter.exceptions
+      } statuses=${JSON.stringify(counter.statuses)}`
+    );
+    //print stats, but warn that the method is flawed: you can't accurately time async calls. (But the inaccuracies are probably neglectable.)
+    console.log(
+      `Fetch Duration Statistics: min=${counter.success_duration_ms.min} max=${
+        counter.success_duration_ms.max
+      } avg=${counter.success_duration_ms.avg()} (flawed method!)`
+    );
+    console.log(
+      `Auth Duration Statistics:\n     token min=${
+        authFetchCache.tokenFetchDuration.min
+      } max=${
+        authFetchCache.tokenFetchDuration.max
+      } avg=${authFetchCache.tokenFetchDuration.avg()} (flawed method!)\n     auth min=${
+        authFetchCache.authFetchDuration.min
+      } max=${
+        authFetchCache.authFetchDuration.max
+      } avg=${authFetchCache.authFetchDuration.avg()} (flawed method!)`
+    );
+  };
+
+  process.on("SIGINT", function () {
+    console.log(`******* GOT SIGINT *****`);
+    console.log(`* Downloads are still in progress...`);
+    console.log(`* Dumping statistics and exiting:`);
+    printFinal();
+    process.exit(1);
+  });
+
   if (duration) {
     const durationMillis = duration * 1000;
     const start = Date.now();
@@ -330,20 +337,8 @@ async function main() {
     await Promise.allSettled(promises);
     console.log(`All fetches completed.`);
   }
-  console.log(`authFetchCache=${authFetchCache}`);
-  console.log(
-    `Fetch Statistics: total=${counter.total} success=${
-      counter.success
-    } failure=${counter.failure} exceptions=${
-      counter.exceptions
-    } statuses=${JSON.stringify(counter.statuses)}`
-  );
-  //print stats, but warn that the method is flawed: you can't accurately time async calls. (But the inaccuracies are probably neglectable.)
-  console.log(
-    `Fetch Duration Statistics: min=${counter.success_duration_ms.min} max=${
-      counter.success_duration_ms.max
-    } avg=${counter.success_duration_ms.avg()} (flawed method!)`
-  );
+
+  printFinal();
 }
 
 try {

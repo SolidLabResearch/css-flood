@@ -5,6 +5,7 @@ import {
 } from "@inrupt/solid-client-authn-core";
 import { ResponseError } from "./error.js";
 import { AnyFetchResponseType, AnyFetchType } from "./generic-fetch.js";
+import { DurationCounter } from "./duration-counter.js";
 
 function accountEmail(account: string): string {
   return `${account}@example.org`;
@@ -18,9 +19,15 @@ export async function createUserToken(
   cssBaseUrl: string,
   account: string,
   password: string,
-  fetcher: AnyFetchType = fetch
+  fetcher: AnyFetchType = fetch,
+  durationCounter: DurationCounter | null = null
 ): Promise<UserToken> {
   //see https://github.com/CommunitySolidServer/CommunitySolidServer/blob/main/documentation/markdown/usage/client-credentials.md
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  if (durationCounter !== null) {
+    durationCounter.start();
+  }
   const res = await fetcher(`${cssBaseUrl}idp/credentials/`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -29,9 +36,13 @@ export async function createUserToken(
       email: accountEmail(account),
       password: password,
     }),
+    signal: controller.signal,
   });
 
   const body = await res.text();
+  if (durationCounter !== null) {
+    durationCounter.stop();
+  }
   if (!res.ok) {
     // if (body.includes(`Could not create token for ${account}`)) {
     //     //ignore
@@ -50,7 +61,8 @@ export async function getUserAuthFetch(
   cssBaseUrl: string,
   account: string,
   token: UserToken,
-  fetcher: AnyFetchType = fetch
+  fetcher: AnyFetchType = fetch,
+  durationCounter: DurationCounter | null = null
 ): Promise<AnyFetchType> {
   //see https://github.com/CommunitySolidServer/CommunitySolidServer/blob/main/documentation/markdown/usage/client-credentials.md
   const { id, secret } = token;
@@ -58,7 +70,12 @@ export async function getUserAuthFetch(
   const dpopKey = await generateDpopKeyPair();
   const authString = `${encodeURIComponent(id)}:${encodeURIComponent(secret)}`;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
   const url = `${cssBaseUrl}.oidc/token`; //ideally, fetch this from token_endpoint in .well-known/openid-configuration
+  if (durationCounter !== null) {
+    durationCounter.start();
+  }
   const res = await fetcher(url, {
     method: "POST",
     headers: {
@@ -67,6 +84,7 @@ export async function getUserAuthFetch(
       dpop: await createDpopHeader(url, "POST", dpopKey),
     },
     body: "grant_type=client_credentials&scope=webid",
+    signal: controller.signal,
   });
 
   const body = await res.text();
@@ -95,5 +113,10 @@ export async function getUserAuthFetch(
   // console.log(`secret=${secret}`);
   // console.log(`expiresIn=${expiresIn}`);
   // console.log(`accessToken=${accessToken}`);
+
+  if (durationCounter !== null) {
+    durationCounter.stop();
+  }
+
   return authFetch;
 }

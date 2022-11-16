@@ -4,6 +4,7 @@ import {
   AnyFetchType,
   es6fetch,
 } from "./generic-fetch.js";
+import { DurationCounter } from "./duration-counter.js";
 
 export class AuthFetchCache {
   cssBaseUrl: string;
@@ -16,6 +17,9 @@ export class AuthFetchCache {
   useCount: number = 0;
   tokenFetchCount: number = 0;
   authFetchCount: number = 0;
+
+  tokenFetchDuration = new DurationCounter();
+  authFetchDuration = new DurationCounter();
 
   fetcher: AnyFetchType;
 
@@ -55,7 +59,8 @@ export class AuthFetchCache {
         this.cssBaseUrl,
         account,
         "password",
-        this.fetcher
+        this.fetcher,
+        this.tokenFetchDuration
       );
       this.tokenFetchCount++;
     }
@@ -64,7 +69,8 @@ export class AuthFetchCache {
         this.cssBaseUrl,
         account,
         token,
-        this.fetcher
+        this.fetcher,
+        this.authFetchDuration
       );
       this.authFetchCount++;
     }
@@ -80,31 +86,40 @@ export class AuthFetchCache {
   }
 
   async preCache(userCount: number) {
+    if (this.authenticateCache === "none") {
+      return;
+    }
+
+    console.log(
+      `Caching ${userCount} user logins (cache method="${this.authenticateCache}")...`
+    );
+
     for (let userIndex = 0; userIndex < userCount; userIndex++) {
       this.authFetchersByUser[userIndex] = null;
 
       const account = `user${userIndex}`;
 
-      if (this.authenticateCache !== "none") {
-        const token = await createUserToken(
+      console.log(`   Pre-cache is authenticating user ${userIndex}...`);
+      const token = await createUserToken(
+        this.cssBaseUrl,
+        account,
+        "password",
+        this.fetcher,
+        this.tokenFetchDuration
+      );
+      this.cssTokensByUser[userIndex] = token;
+      this.tokenFetchCount++;
+
+      if (this.authenticateCache === "all") {
+        const fetch = await getUserAuthFetch(
           this.cssBaseUrl,
           account,
-          "password",
-          this.fetcher
+          token,
+          this.fetcher,
+          this.authFetchDuration
         );
-        this.cssTokensByUser[userIndex] = token;
-        this.tokenFetchCount++;
-
-        if (this.authenticateCache === "all") {
-          const fetch = await getUserAuthFetch(
-            this.cssBaseUrl,
-            account,
-            token,
-            this.fetcher
-          );
-          this.authFetchersByUser[userIndex] = fetch;
-          this.authFetchCount++;
-        }
+        this.authFetchersByUser[userIndex] = fetch;
+        this.authFetchCount++;
       }
     }
   }
