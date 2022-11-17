@@ -15,6 +15,10 @@ export interface UserToken {
   id: string;
   secret: string;
 }
+export interface AccessToken {
+  token: string;
+  expire: Date;
+}
 export async function createUserToken(
   cssBaseUrl: string,
   account: string,
@@ -62,8 +66,10 @@ export async function getUserAuthFetch(
   account: string,
   token: UserToken,
   fetcher: AnyFetchType = fetch,
-  durationCounter: DurationCounter | null = null
-): Promise<AnyFetchType> {
+  accessTokenDurationCounter: DurationCounter | null = null,
+  fetchDurationCounter: DurationCounter | null = null,
+  accessToken: AccessToken | null = null
+): Promise<[AnyFetchType, AccessToken]> {
   //see https://github.com/CommunitySolidServer/CommunitySolidServer/blob/main/documentation/markdown/usage/client-credentials.md
   const { id, secret } = token;
 
@@ -73,38 +79,51 @@ export async function getUserAuthFetch(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
   const url = `${cssBaseUrl}.oidc/token`; //ideally, fetch this from token_endpoint in .well-known/openid-configuration
-  if (durationCounter !== null) {
-    durationCounter.start();
-  }
-  const res = await fetcher(url, {
-    method: "POST",
-    headers: {
-      authorization: `Basic ${Buffer.from(authString).toString("base64")}`,
-      "content-type": "application/x-www-form-urlencoded",
-      dpop: await createDpopHeader(url, "POST", dpopKey),
-    },
-    body: "grant_type=client_credentials&scope=webid",
-    signal: controller.signal,
-  });
-
-  const body = await res.text();
-  if (!res.ok) {
-    // if (body.includes(`Could not create access token for ${account}`)) {
-    //     //ignore
-    //     return {};
-    // }
-    console.error(
-      `${res.status} - Creating access token for ${account} failed:`
-    );
-    console.error(body);
-    throw new ResponseError(res, body);
+  if (accessTokenDurationCounter !== null) {
+    accessTokenDurationCounter.start();
   }
 
-  const { access_token: accessToken, expires_in: expiresIn } = JSON.parse(body);
+  if (accessToken === null) {
+    const res = await fetcher(url, {
+      method: "POST",
+      headers: {
+        authorization: `Basic ${Buffer.from(authString).toString("base64")}`,
+        "content-type": "application/x-www-form-urlencoded",
+        dpop: await createDpopHeader(url, "POST", dpopKey),
+      },
+      body: "grant_type=client_credentials&scope=webid",
+      signal: controller.signal,
+    });
+
+    const body = await res.text();
+    if (!res.ok) {
+      // if (body.includes(`Could not create access token for ${account}`)) {
+      //     //ignore
+      //     return {};
+      // }
+      console.error(
+        `${res.status} - Creating access token for ${account} failed:`
+      );
+      console.error(body);
+      throw new ResponseError(res, body);
+    }
+
+    const { access_token: accessTokenStr, expires_in: expiresIn } =
+      JSON.parse(body);
+    const expire = new Date(new Date().getTime() + parseInt(expiresIn));
+    accessToken = { token: accessTokenStr, expire: expire };
+  }
+  if (accessTokenDurationCounter !== null) {
+    accessTokenDurationCounter.stop();
+  }
+
+  if (fetchDurationCounter !== null) {
+    fetchDurationCounter.start();
+  }
   const authFetch: AnyFetchType = await buildAuthenticatedFetch(
     // @ts-ignore
     fetcher,
-    accessToken,
+    accessToken.token,
     { dpopKey }
   );
   // console.log(`Created Access Token using CSS token:`);
@@ -112,11 +131,11 @@ export async function getUserAuthFetch(
   // console.log(`id=${id}`);
   // console.log(`secret=${secret}`);
   // console.log(`expiresIn=${expiresIn}`);
-  // console.log(`accessToken=${accessToken}`);
+  // console.log(`accessToken=${accessTokenStr}`);
 
-  if (durationCounter !== null) {
-    durationCounter.stop();
+  if (fetchDurationCounter !== null) {
+    fetchDurationCounter.stop();
   }
 
-  return authFetch;
+  return [authFetch, accessToken];
 }

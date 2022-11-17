@@ -12,6 +12,7 @@ import {
   es6fetch,
 } from "./generic-fetch.js";
 import { DurationCounter } from "./duration-counter.js";
+import * as fs from "fs";
 
 const argv = yargs(hideBin(process.argv))
   .option("url", {
@@ -69,9 +70,36 @@ const argv = yargs(hideBin(process.argv))
       "For each user, cache all authentication, or only the CSS token, or authenticate fully each time.",
     default: "all",
   })
-  .option("useNodeFetch", {
+  .option("fetchVersion", {
+    type: "string",
+    choices: ["node", "es6"],
+    description:
+      "Use node-fetch or ES6 fetch (ES6 fetch is only available for nodejs versions >= 18)",
+    default: "node",
+  })
+  .option("authCacheFile", {
+    type: "string",
+    description: "File to load/save the auth cache from/to",
+  })
+  .option("loadAuthCacheFile", {
     type: "boolean",
-    description: "Use node-fetch instead of ES6 fetch",
+    description: "Load the auth cache from file before doing anything else?",
+    default: false,
+  })
+  .option("saveAuthCacheFile", {
+    type: "boolean",
+    description:
+      "Save the auth cache to file? (After pre-caching and after full run)",
+    default: false,
+  })
+  .option("preCacheAuth", {
+    type: "boolean",
+    description: "Pre-cache the authentication before starting?",
+    default: false,
+  })
+  .option("onlyPreCacheAuth", {
+    type: "boolean",
+    description: "Stop directly after pre-caching (and optionally saving)",
     default: false,
   })
   .help()
@@ -229,7 +257,13 @@ async function main() {
   const authenticateCache: "none" | "token" | "all" =
     argv.authenticateCache || "all";
   const authenticate = argv.authenticate || false;
-  const useNodeFetch = argv.useNodeFetch || false;
+  const useNodeFetch = argv.fetchVersion == "node" || false;
+  const authCacheFile = argv.authCacheFile || null;
+  const loadAuthCacheFile = argv.loadAuthCacheFile || false;
+  const saveAuthCacheFile = argv.saveAuthCacheFile || false;
+  const onlyPreCacheAuth = argv.onlyPreCacheAuth || false;
+  const preCacheAuth = argv.preCacheAuth || argv.onlyPreCacheAuth || false; //onlyPreCacheAuth implies preCacheAuth
+
   const requests = [];
   const promises = [];
 
@@ -242,12 +276,52 @@ async function main() {
     fetcher
   );
 
-  const authFetchersByUser: Array<() => Promise<AnyFetchType>> = [];
-  if (authenticate) {
+  if (loadAuthCacheFile && authCacheFile && fs.existsSync(authCacheFile)) {
+    console.log(`Loading auth cache from '${authCacheFile}'`);
+    await authFetchCache.load(authCacheFile);
+    console.log(`Auth cache now has '${authFetchCache.toCountString()}'`);
+  }
+
+  if (authenticate && preCacheAuth) {
+    const preCacheStart = new Date().getTime();
     await authFetchCache.preCache(userCount);
+    const preCacheStop = new Date().getTime();
+    console.log(
+      `PreCache tool '${(preCacheStop - preCacheStart) / 1000.0} seconds'`
+    );
+    console.log(`Auth cache now has '${authFetchCache.toCountString()}'`);
   }
 
   console.log(`userCount=${userCount} authFetchCache=${authFetchCache}`);
+
+  if (saveAuthCacheFile && authCacheFile) {
+    console.log(`Saving auth cache to '${authCacheFile}'`);
+    await authFetchCache.save(authCacheFile);
+  }
+
+  const printAuthCacheStats = function () {
+    console.log(
+      `Auth Duration Statistics:\n     token min=${
+        authFetchCache.tokenFetchDuration.min
+      } max=${
+        authFetchCache.tokenFetchDuration.max
+      } avg=${authFetchCache.tokenFetchDuration.avg()} (flawed method!)\n     access token min=${
+        authFetchCache.authAccessTokenDuration.min
+      } max=${
+        authFetchCache.authAccessTokenDuration.max
+      } avg=${authFetchCache.authAccessTokenDuration.avg()} (flawed method!)\n     authfetch min=${
+        authFetchCache.authFetchDuration.min
+      } max=${
+        authFetchCache.authFetchDuration.max
+      } avg=${authFetchCache.authFetchDuration.avg()} (flawed method!)`
+    );
+  };
+
+  if (onlyPreCacheAuth) {
+    printAuthCacheStats();
+    console.log(`--onlyPreCacheAuth set: will exit now`);
+    process.exit(0);
+  }
 
   let counter = new Counter();
   const printFinal = function () {
@@ -265,17 +339,7 @@ async function main() {
         counter.success_duration_ms.max
       } avg=${counter.success_duration_ms.avg()} (flawed method!)`
     );
-    console.log(
-      `Auth Duration Statistics:\n     token min=${
-        authFetchCache.tokenFetchDuration.min
-      } max=${
-        authFetchCache.tokenFetchDuration.max
-      } avg=${authFetchCache.tokenFetchDuration.avg()} (flawed method!)\n     auth min=${
-        authFetchCache.authFetchDuration.min
-      } max=${
-        authFetchCache.authFetchDuration.max
-      } avg=${authFetchCache.authFetchDuration.avg()} (flawed method!)`
-    );
+    printAuthCacheStats();
   };
 
   process.on("SIGINT", function () {
