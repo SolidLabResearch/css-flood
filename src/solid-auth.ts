@@ -61,6 +61,17 @@ export async function createUserToken(
   return { id, secret };
 }
 
+function stillUsableAccessToken(accessToken: AccessToken): boolean {
+  if (!accessToken.token || !accessToken.expire) {
+    return false;
+  }
+  const now = new Date().getTime();
+  const expire = accessToken.expire.getTime();
+  const deadline_s = 5 * 60;
+  //accessToken.expire should be 5 minutes in the future at least
+  return expire > now && expire - now > deadline_s;
+}
+
 export async function getUserAuthFetch(
   cssBaseUrl: string,
   account: string,
@@ -83,7 +94,7 @@ export async function getUserAuthFetch(
     accessTokenDurationCounter.start();
   }
 
-  if (accessToken === null) {
+  if (accessToken === null || !stillUsableAccessToken(accessToken)) {
     const res = await fetcher(url, {
       method: "POST",
       headers: {
