@@ -407,7 +407,7 @@ async function main() {
     await Promise.allSettled(promises);
     const runMillis = Date.now() - start;
     console.log(`All fetches completed after ${runMillis / 1000.0} seconds.`);
-    if (runMillis) {
+    if (runMillis < durationMillis) {
       console.error(
         `ERROR: Fetches completed too early!\n    runtime=${runMillis} ms\n    requested duration=${duration} s (=${durationMillis} ms)\n`
       );
