@@ -308,7 +308,7 @@ async function main() {
     await authFetchCache.preCache(userCount);
     const preCacheStop = new Date().getTime();
     console.log(
-      `PreCache tool '${(preCacheStop - preCacheStart) / 1000.0} seconds'`
+      `PreCache took '${(preCacheStop - preCacheStart) / 1000.0} seconds'`
     );
     console.log(`Auth cache now has '${authFetchCache.toCountString()}'`);
   }
