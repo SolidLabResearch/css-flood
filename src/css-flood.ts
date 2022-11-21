@@ -242,9 +242,16 @@ async function awaitUntilDeadline(
   start: number,
   durationMillis: number
 ) {
-  while (Date.now() - start < durationMillis) {
-    const action = actionMaker();
-    await action;
+  try {
+    while (Date.now() - start < durationMillis) {
+      const action = actionMaker();
+      await action;
+    }
+  } catch (err) {
+    console.error(
+      `Failed to fetch in awaitUntilDeadline loop (= implementation error): \n${err}`
+    );
+    process.exit(2);
   }
 }
 
@@ -380,9 +387,14 @@ async function main() {
       `Fetching files from ${userCount} users. Max ${parallel} parallel requests. Will stop after ${duration} seconds...`
     );
     await Promise.allSettled(promises);
-    console.log(
-      `All fetches completed after ${(Date.now() - start) / 1000.0} seconds.`
-    );
+    const runMillis = Date.now() - start;
+    console.log(`All fetches completed after ${runMillis / 1000.0} seconds.`);
+    if (runMillis) {
+      console.error(
+        `ERROR: Fetches completed too early!\n    runtime=${runMillis} ms\n    requested duration=${duration} s (=${durationMillis} ms)\n`
+      );
+      process.exit(1);
+    }
   } else {
     //Execute all requested fetches, no matter how long it takes.
     for (let i = 0; i < fetchCount; i++) {
