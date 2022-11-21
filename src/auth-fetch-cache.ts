@@ -2,6 +2,7 @@ import {
   AccessToken,
   createUserToken,
   getUserAuthFetch,
+  stillUsableAccessToken,
   UserToken,
 } from "./solid-auth.js";
 import {
@@ -150,6 +151,57 @@ export class AuthFetchCache {
     }
   }
 
+  validate(userCount: number) {
+    if (this.authenticateCache === "none") {
+      return;
+    }
+
+    console.log(
+      `Validating cache of ${userCount} user logins (cache method="${this.authenticateCache}")...`
+    );
+
+    const now = new Date();
+    let allValid = true;
+    for (let userIndex = 0; userIndex < userCount; userIndex++) {
+      this.authFetchersByUser[userIndex] = null;
+      const account = `user${userIndex}`;
+
+      const token = this.cssTokensByUser[userIndex];
+      if (!token) {
+        console.warn(`   No user token for ${account}`);
+        allValid = false;
+      }
+
+      const accessToken = this.authAccessTokenByUser[userIndex];
+      if (this.authenticateCache === "all" && !accessToken) {
+        console.warn(`   No access token for ${account}`);
+        allValid = false;
+      }
+
+      if (
+        this.authenticateCache === "all" &&
+        accessToken &&
+        !stillUsableAccessToken(accessToken)
+      ) {
+        const secondExpired =
+          (now.getTime() - accessToken.expire.getTime()) / 1000.0;
+        console.warn(
+          `   No usable access token for ${account}. \n` +
+            `      expiration=${accessToken.expire} \n` +
+            `      now=${now} \n` +
+            `      secondExpired=${secondExpired}`
+        );
+        allValid = false;
+      }
+    }
+    if (!allValid) {
+      console.error("Cache validation failed. Exiting.");
+      process.exit(1);
+    } else {
+      console.log(`    ... all valid!`);
+    }
+  }
+
   // cssBaseUrl: string;
   // authenticateCache: "none" | "token" | "all" = "none";
   // authenticate: boolean = false;
@@ -187,5 +239,13 @@ export class AuthFetchCache {
     const c = JSON.parse(cacheContent);
     this.cssTokensByUser = c.cssTokensByUser;
     this.authAccessTokenByUser = c.authAccessTokenByUser;
+    for (const accessToken of this.authAccessTokenByUser.values()) {
+      if (accessToken) {
+        //because we got if from JSON, accessToken.expire will be a string, not a Date!
+        // @ts-ignore
+        const expireString: string = accessToken.expire;
+        accessToken.expire = new Date(Date.parse(expireString));
+      }
+    }
   }
 }

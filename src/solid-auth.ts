@@ -61,7 +61,7 @@ export async function createUserToken(
   return { id, secret };
 }
 
-function stillUsableAccessToken(accessToken: AccessToken): boolean {
+export function stillUsableAccessToken(accessToken: AccessToken): boolean {
   if (!accessToken.token || !accessToken.expire) {
     return false;
   }

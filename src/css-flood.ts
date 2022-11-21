@@ -86,6 +86,12 @@ const argv = yargs(hideBin(process.argv))
     description: "Load the auth cache from file before doing anything else?",
     default: false,
   })
+  .option("validateAuthCache", {
+    type: "boolean",
+    demandOption: false,
+    description:
+      "Validate the auth cache loaded from file before doing anything else? (default: auto based on --loadAuthCacheFile and --onlyPreCacheAuth)",
+  })
   .option("saveAuthCacheFile", {
     type: "boolean",
     description:
@@ -270,6 +276,14 @@ async function main() {
   const saveAuthCacheFile = argv.saveAuthCacheFile || false;
   const onlyPreCacheAuth = argv.onlyPreCacheAuth || false;
   const preCacheAuth = argv.preCacheAuth || argv.onlyPreCacheAuth || false; //onlyPreCacheAuth implies preCacheAuth
+  const validateAuthCache =
+    argv.validateAuthCache === true
+      ? true
+      : argv.validateAuthCache == false
+      ? false
+      : onlyPreCacheAuth
+      ? false
+      : argv.loadAuthCacheFile; //fallback to same as loadAuthCacheFile if not onlyPreCacheAuth
 
   const requests = [];
   const promises = [];
@@ -297,6 +311,10 @@ async function main() {
       `PreCache tool '${(preCacheStop - preCacheStart) / 1000.0} seconds'`
     );
     console.log(`Auth cache now has '${authFetchCache.toCountString()}'`);
+  }
+
+  if (authenticate && validateAuthCache) {
+    authFetchCache.validate(userCount);
   }
 
   console.log(`userCount=${userCount} authFetchCache=${authFetchCache}`);
