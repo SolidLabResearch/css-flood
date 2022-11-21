@@ -226,9 +226,15 @@ export class AuthFetchCache {
   }
 
   async save(authCacheFile: string) {
+    const accessTokenForJson = { ...this.authAccessTokenByUser }.map(
+      (accessToken) =>
+        !accessToken
+          ? null
+          : { token: accessToken.token, expire: accessToken.expire.getTime() }
+    );
     const c = {
       cssTokensByUser: this.cssTokensByUser,
-      authAccessTokenByUser: this.authAccessTokenByUser,
+      authAccessTokenByUser: accessTokenForJson,
     };
     const cacheContent = JSON.stringify(c);
     await fs.writeFile(authCacheFile, cacheContent);
@@ -243,8 +249,18 @@ export class AuthFetchCache {
       if (accessToken) {
         //because we got if from JSON, accessToken.expire will be a string, not a Date!
         // @ts-ignore
-        const expireString: string = accessToken.expire;
-        accessToken.expire = new Date(Date.parse(expireString));
+        if (typeof accessToken === "number") {
+          // @ts-ignore
+          const expireLong: number = accessToken.expire;
+          // @ts-ignore
+          accessToken.expire = new Date(expireLong);
+        } else {
+          console.error(
+            `AccessToken in JSON has expire of unexpected type (${typeof accessToken.expire}) value=${
+              accessToken.expire
+            }`
+          );
+        }
       }
     }
   }
