@@ -32,22 +32,27 @@ export async function createUserToken(
   if (durationCounter !== null) {
     durationCounter.start();
   }
-  const res = await fetcher(`${cssBaseUrl}idp/credentials/`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      name: `token-css-populate-${account}`,
-      email: accountEmail(account),
-      password: password,
-    }),
-    signal: controller.signal,
-  });
+  let res = null;
+  let body = null;
+  try {
+    res = await fetcher(`${cssBaseUrl}idp/credentials/`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: `token-css-populate-${account}`,
+        email: accountEmail(account),
+        password: password,
+      }),
+      signal: controller.signal,
+    });
 
-  const body = await res.text();
-  if (durationCounter !== null) {
-    durationCounter.stop();
+    body = await res.text();
+  } finally {
+    if (durationCounter !== null) {
+      durationCounter.stop();
+    }
   }
-  if (!res.ok) {
+  if (!res || !res.ok) {
     // if (body.includes(`Could not create token for ${account}`)) {
     //     //ignore
     //     return {};
@@ -94,59 +99,66 @@ export async function getUserAuthFetch(
     accessTokenDurationCounter.start();
   }
 
-  if (accessToken === null || !stillUsableAccessToken(accessToken)) {
-    const res = await fetcher(url, {
-      method: "POST",
-      headers: {
-        authorization: `Basic ${Buffer.from(authString).toString("base64")}`,
-        "content-type": "application/x-www-form-urlencoded",
-        dpop: await createDpopHeader(url, "POST", dpopKey),
-      },
-      body: "grant_type=client_credentials&scope=webid",
-      signal: controller.signal,
-    });
+  try {
+    if (accessToken === null || !stillUsableAccessToken(accessToken)) {
+      const res = await fetcher(url, {
+        method: "POST",
+        headers: {
+          authorization: `Basic ${Buffer.from(authString).toString("base64")}`,
+          "content-type": "application/x-www-form-urlencoded",
+          dpop: await createDpopHeader(url, "POST", dpopKey),
+        },
+        body: "grant_type=client_credentials&scope=webid",
+        signal: controller.signal,
+      });
 
-    const body = await res.text();
-    if (!res.ok) {
-      // if (body.includes(`Could not create access token for ${account}`)) {
-      //     //ignore
-      //     return {};
-      // }
-      console.error(
-        `${res.status} - Creating access token for ${account} failed:`
+      const body = await res.text();
+      if (!res.ok) {
+        // if (body.includes(`Could not create access token for ${account}`)) {
+        //     //ignore
+        //     return {};
+        // }
+        console.error(
+          `${res.status} - Creating access token for ${account} failed:`
+        );
+        console.error(body);
+        throw new ResponseError(res, body);
+      }
+
+      const { access_token: accessTokenStr, expires_in: expiresIn } =
+        JSON.parse(body);
+      const expire = new Date(
+        new Date().getTime() + parseInt(expiresIn) * 1000
       );
-      console.error(body);
-      throw new ResponseError(res, body);
+      accessToken = { token: accessTokenStr, expire: expire };
     }
-
-    const { access_token: accessTokenStr, expires_in: expiresIn } =
-      JSON.parse(body);
-    const expire = new Date(new Date().getTime() + parseInt(expiresIn) * 1000);
-    accessToken = { token: accessTokenStr, expire: expire };
-  }
-  if (accessTokenDurationCounter !== null) {
-    accessTokenDurationCounter.stop();
+  } finally {
+    if (accessTokenDurationCounter !== null) {
+      accessTokenDurationCounter.stop();
+    }
   }
 
   if (fetchDurationCounter !== null) {
     fetchDurationCounter.start();
   }
-  const authFetch: AnyFetchType = await buildAuthenticatedFetch(
-    // @ts-ignore
-    fetcher,
-    accessToken.token,
-    { dpopKey }
-  );
-  // console.log(`Created Access Token using CSS token:`);
-  // console.log(`account=${account}`);
-  // console.log(`id=${id}`);
-  // console.log(`secret=${secret}`);
-  // console.log(`expiresIn=${expiresIn}`);
-  // console.log(`accessToken=${accessTokenStr}`);
+  try {
+    const authFetch: AnyFetchType = await buildAuthenticatedFetch(
+      // @ts-ignore
+      fetcher,
+      accessToken.token,
+      { dpopKey }
+    );
+    // console.log(`Created Access Token using CSS token:`);
+    // console.log(`account=${account}`);
+    // console.log(`id=${id}`);
+    // console.log(`secret=${secret}`);
+    // console.log(`expiresIn=${expiresIn}`);
+    // console.log(`accessToken=${accessTokenStr}`);
 
-  if (fetchDurationCounter !== null) {
-    fetchDurationCounter.stop();
+    return [authFetch, accessToken];
+  } finally {
+    if (fetchDurationCounter !== null) {
+      fetchDurationCounter.stop();
+    }
   }
-
-  return [authFetch, accessToken];
 }
