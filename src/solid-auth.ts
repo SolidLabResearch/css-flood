@@ -121,7 +121,7 @@ export async function getUserAuthFetch(
 
     const { access_token: accessTokenStr, expires_in: expiresIn } =
       JSON.parse(body);
-    const expire = new Date(new Date().getTime() + parseInt(expiresIn));
+    const expire = new Date(new Date().getTime() + parseInt(expiresIn) * 1000);
     accessToken = { token: accessTokenStr, expire: expire };
   }
   if (accessTokenDurationCounter !== null) {
