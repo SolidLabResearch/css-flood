@@ -249,7 +249,7 @@ export class AuthFetchCache {
       if (accessToken) {
         //because we got if from JSON, accessToken.expire will be a string, not a Date!
         // @ts-ignore
-        if (typeof accessToken === "number") {
+        if (typeof accessToken.expire === "number") {
           // @ts-ignore
           const expireLong: number = accessToken.expire;
           // @ts-ignore
