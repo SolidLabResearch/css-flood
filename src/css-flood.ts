@@ -90,7 +90,7 @@ const argv = yargs(hideBin(process.argv))
     type: "boolean",
     demandOption: false,
     description:
-      "Validate the auth cache loaded from file before doing anything else? (default: auto based on --loadAuthCacheFile and --onlyPreCacheAuth)",
+      "Validate the auth cache loaded from file before doing anything else? (default: auto based on --loadAuthCacheFile and --preCacheAuth)",
   })
   .option("saveAuthCacheFile", {
     type: "boolean",
@@ -281,9 +281,9 @@ async function main() {
       ? true
       : argv.validateAuthCache == false
       ? false
-      : onlyPreCacheAuth
+      : onlyPreCacheAuth || preCacheAuth
       ? false
-      : argv.loadAuthCacheFile; //fallback to same as loadAuthCacheFile if not onlyPreCacheAuth
+      : argv.loadAuthCacheFile; //fallback to same as loadAuthCacheFile if not preCacheAuth
 
   const requests = [];
   const promises = [];
