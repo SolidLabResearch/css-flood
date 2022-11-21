@@ -226,7 +226,7 @@ export class AuthFetchCache {
   }
 
   async save(authCacheFile: string) {
-    const accessTokenForJson = { ...this.authAccessTokenByUser }.map(
+    const accessTokenForJson = [...this.authAccessTokenByUser].map(
       (accessToken) =>
         !accessToken
           ? null
