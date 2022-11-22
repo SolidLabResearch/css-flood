@@ -29,9 +29,7 @@ export async function createUserToken(
   //see https://github.com/CommunitySolidServer/CommunitySolidServer/blob/main/documentation/markdown/usage/client-credentials.md
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
-  if (durationCounter !== null) {
-    durationCounter.start();
-  }
+  const startTime = new Date().getTime();
   let res = null;
   let body = null;
   try {
@@ -49,7 +47,7 @@ export async function createUserToken(
     body = await res.text();
   } finally {
     if (durationCounter !== null) {
-      durationCounter.stop();
+      durationCounter.addDuration(new Date().getTime() - startTime);
     }
   }
   if (!res || !res.ok) {
@@ -95,10 +93,8 @@ export async function getUserAuthFetch(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
   const url = `${cssBaseUrl}.oidc/token`; //ideally, fetch this from token_endpoint in .well-known/openid-configuration
-  if (accessTokenDurationCounter !== null) {
-    accessTokenDurationCounter.start();
-  }
 
+  const accessTokenDurationStart = new Date().getTime();
   try {
     if (accessToken === null || !stillUsableAccessToken(accessToken)) {
       const res = await fetcher(url, {
@@ -134,13 +130,13 @@ export async function getUserAuthFetch(
     }
   } finally {
     if (accessTokenDurationCounter !== null) {
-      accessTokenDurationCounter.stop();
+      accessTokenDurationCounter.addDuration(
+        new Date().getTime() - accessTokenDurationStart
+      );
     }
   }
 
-  if (fetchDurationCounter !== null) {
-    fetchDurationCounter.start();
-  }
+  const fetchDurationStart = new Date().getTime();
   try {
     const authFetch: AnyFetchType = await buildAuthenticatedFetch(
       // @ts-ignore
@@ -158,7 +154,9 @@ export async function getUserAuthFetch(
     return [authFetch, accessToken];
   } finally {
     if (fetchDurationCounter !== null) {
-      fetchDurationCounter.stop();
+      fetchDurationCounter.addDuration(
+        new Date().getTime() - fetchDurationStart
+      );
     }
   }
 }
