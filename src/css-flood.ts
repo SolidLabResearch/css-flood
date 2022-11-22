@@ -253,10 +253,12 @@ async function awaitUntilDeadline(
       const action = actionMaker();
       await action;
     }
-  } catch (err) {
+    // @ts-ignore
+  } catch (err: any) {
     console.error(
-      `Failed to fetch in awaitUntilDeadline loop (= implementation error): \n${err}`
+      `Failed to fetch in awaitUntilDeadline loop (= implementation error): \n${err.name}: ${err.message}`
     );
+    console.error(err);
     process.exit(2);
   }
 }

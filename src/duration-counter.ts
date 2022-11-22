@@ -28,13 +28,17 @@ export class DurationCounter {
 
   start() {
     if (this.curStart !== -1) {
-      throw new Error("Implementation error");
+      throw new Error(
+        "Implementation error: DurationCounter.start() without stop() first"
+      );
     }
     this.curStart = new Date().getTime();
   }
   stop() {
     if (this.curStart === -1) {
-      throw new Error("Implementation error");
+      throw new Error(
+        "Implementation error: DurationCounter.stop() without start() first"
+      );
     }
     const stop = new Date().getTime();
     this.addDuration(stop - this.curStart);
