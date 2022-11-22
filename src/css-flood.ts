@@ -180,11 +180,11 @@ async function fetchPodFile(
   counter: Counter,
   authFetchCache: AuthFetchCache
 ) {
-  const account = `user${userIndex}`;
-  const aFetch = await authFetchCache.getAuthFetcher(userIndex);
-  // console.log(`   Will fetch file from account ${account}, pod path "${podFileRelative}"`);
-  counter.total++;
   try {
+    const account = `user${userIndex}`;
+    const aFetch = await authFetchCache.getAuthFetcher(userIndex);
+    // console.log(`   Will fetch file from account ${account}, pod path "${podFileRelative}"`);
+    counter.total++;
     const startedFetch = new Date().getTime();
     const res: AnyFetchResponseType = await aFetch(
       `${cssBaseUrl}${account}/${podFileRelative}`,

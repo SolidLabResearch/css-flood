@@ -45,6 +45,11 @@ export async function createUserToken(
     });
 
     body = await res.text();
+  } catch (error: any) {
+    if (error.name === "AbortError") {
+      console.error(`Fetching user token took too long: aborted`);
+    }
+    throw error;
   } finally {
     if (durationCounter !== null) {
       durationCounter.addDuration(new Date().getTime() - startTime);
@@ -128,6 +133,11 @@ export async function getUserAuthFetch(
       );
       accessToken = { token: accessTokenStr, expire: expire };
     }
+  } catch (error: any) {
+    if (error.name === "AbortError") {
+      console.error(`Fetching access token took too long: aborted`);
+    }
+    throw error;
   } finally {
     if (accessTokenDurationCounter !== null) {
       accessTokenDurationCounter.addDuration(
