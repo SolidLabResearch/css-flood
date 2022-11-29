@@ -51,6 +51,14 @@ const argv = yargs(hideBin(process.argv))
     demandOption: false,
     default: 10,
   })
+  .option("fetchTimeoutMs", {
+    alias: "t",
+    type: "number",
+    description:
+      "How long before aborting a fetch because it takes too long? (in ms)",
+    demandOption: false,
+    default: 4_000,
+  })
   .option("filename", {
     alias: "f",
     type: "string",
@@ -123,6 +131,7 @@ class Counter {
   success: number = 0;
   failure: number = 0;
   exceptions: number = 0;
+  timeout: number = 0;
   statuses: StatusNumberInfo = {};
 
   success_duration_ms = new DurationCounter();
@@ -178,7 +187,8 @@ async function fetchPodFile(
   userIndex: number,
   podFileRelative: string,
   counter: Counter,
-  authFetchCache: AuthFetchCache
+  authFetchCache: AuthFetchCache,
+  fetchTimeoutMs: number
 ) {
   try {
     const account = `user${userIndex}`;
@@ -193,7 +203,7 @@ async function fetchPodFile(
         //open bug in nodejs typescript that AbortSignal.timeout doesn't work
         //  see https://github.com/node-fetch/node-fetch/issues/741
         // @ts-ignore
-        signal: AbortSignal.timeout(4_000), // abort after 4 seconds //supported in nodejs>=17.3
+        signal: AbortSignal.timeout(fetchTimeoutMs), // abort after 4 seconds //supported in nodejs>=17.3
       }
     );
     // console.log(`res.ok`, res.ok);
@@ -219,15 +229,23 @@ async function fetchPodFile(
         counter.success_duration_ms.addDuration(stoppedFetch - startedFetch);
       } else {
         console.warn("successful fetch, but no body!");
-        counter.exceptions++;
+        counter.failure++;
       }
     }
-  } catch (e) {
+  } catch (e: any) {
+    counter.failure++;
+
+    if (e.name === "AbortError") {
+      counter.timeout++;
+      console.error(`Fetch took longer than ${fetchTimeoutMs} ms: aborted`);
+      return;
+    }
+
+    counter.exceptions++;
     if (counter.exceptions < 10) {
       //only log first 10 exceptions
       console.error(e);
     }
-    counter.failure++;
   }
   // console.log(`res.text`, body);
 }
@@ -265,6 +283,7 @@ async function awaitUntilDeadline(
 
 async function main() {
   const userCount = argv.userCount || 1;
+  const fetchTimeoutMs = argv.fetchTimeoutMs || 4_000;
   const fetchCount = argv.fetchCount || 1;
   const parallel = argv.parallel || 10;
   const duration = argv.duration;
@@ -328,15 +347,15 @@ async function main() {
 
   const printAuthCacheStats = function () {
     console.log(
-      `Auth Duration Statistics:\n     token min=${
+      `Auth Duration Statistics fetching user token: min=${
         authFetchCache.tokenFetchDuration.min
       } max=${
         authFetchCache.tokenFetchDuration.max
-      } avg=${authFetchCache.tokenFetchDuration.avg()} (flawed method!)\n     access token min=${
+      } avg=${authFetchCache.tokenFetchDuration.avg()} (flawed method!)\nAuth Duration Statistics fetching access token: min=${
         authFetchCache.authAccessTokenDuration.min
       } max=${
         authFetchCache.authAccessTokenDuration.max
-      } avg=${authFetchCache.authAccessTokenDuration.avg()} (flawed method!)\n     authfetch min=${
+      } avg=${authFetchCache.authAccessTokenDuration.avg()} (flawed method!)\nAuth Duration Statistics building fetcher: min=${
         authFetchCache.authFetchDuration.min
       } max=${
         authFetchCache.authFetchDuration.max
@@ -358,7 +377,7 @@ async function main() {
         counter.success
       } failure=${counter.failure} exceptions=${
         counter.exceptions
-      } statuses=${JSON.stringify(counter.statuses)}`
+      } statuses=${JSON.stringify(counter.statuses)} timeout=${counter.timeout}`
     );
     //print stats, but warn that the method is flawed: you can't accurately time async calls. (But the inaccuracies are probably neglectable.)
     console.log(
@@ -388,7 +407,13 @@ async function main() {
       if (curUserId >= userCount) {
         curUserId = 0;
       }
-      return fetchPodFile(userId, podFilename, counter, authFetchCache);
+      return fetchPodFile(
+        userId,
+        podFilename,
+        counter,
+        authFetchCache,
+        fetchTimeoutMs
+      );
     };
     for (let p = 0; p < parallel; p++) {
       promises.push(
@@ -420,7 +445,7 @@ async function main() {
     for (let i = 0; i < fetchCount; i++) {
       for (let j = 0; j < userCount; j++) {
         requests.push(() =>
-          fetchPodFile(j, podFilename, counter, authFetchCache)
+          fetchPodFile(j, podFilename, counter, authFetchCache, fetchTimeoutMs)
         );
       }
     }
