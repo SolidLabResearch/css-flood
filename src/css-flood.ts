@@ -100,11 +100,11 @@ const argv = yargs(hideBin(process.argv))
     description:
       "Validate the auth cache loaded from file before doing anything else? (default: auto based on --loadAuthCacheFile and --preCacheAuth)",
   })
-  .option("testAuthCache", {
+  .option("testAuth", {
     type: "boolean",
     demandOption: false,
     description:
-      "Test the auth cache loaded from file before doing anything else? This attempts to download a file with each user. (default: false)",
+      "Test the authentication before doing anything else? This attempts to download a file with each user, using the authentication cache. (default: false)",
   })
   .option("saveAuthCacheFile", {
     type: "boolean",
@@ -311,7 +311,7 @@ async function main() {
       : onlyPreCacheAuth || preCacheAuth
       ? false
       : argv.loadAuthCacheFile; //fallback to same as loadAuthCacheFile if not preCacheAuth
-  const testAuthCache = argv.testAuthCache || false;
+  const testAuth = argv.testAuth || false;
 
   const requests = [];
   const promises = [];
@@ -344,7 +344,7 @@ async function main() {
   if (authenticate && validateAuthCache) {
     authFetchCache.validate(userCount);
   }
-  if (authenticate && testAuthCache) {
+  if (authenticate && testAuth) {
     await authFetchCache.test(
       userCount,
       cssBaseUrl,

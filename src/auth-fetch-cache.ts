@@ -208,12 +208,8 @@ export class AuthFetchCache {
     filename: string,
     fetchTimeoutMs: number
   ) {
-    if (this.authenticateCache === "none") {
-      return;
-    }
-
     console.log(
-      `Testing cache of ${userCount} user logins (cache method="${this.authenticateCache}")...`
+      `Testing ${userCount} user logins (authenticate=${this.authenticate} authenticateCache="${this.authenticateCache}")...`
     );
 
     let allSuccess = true;
@@ -234,21 +230,24 @@ export class AuthFetchCache {
         if (!res.ok) {
           allSuccess = false;
           console.error(
-            `         Cache test failed for user ${userIndex}. HTTP status ${res.status}`
+            `         Authentication test failed for user ${userIndex}. HTTP status ${res.status}`
           );
         } else {
           const body = await res.text();
         }
       } catch (e) {
         allSuccess = false;
-        console.error(`         Cache test exception for user ${userIndex}`, e);
+        console.error(
+          `         Authentication test exception for user ${userIndex}`,
+          e
+        );
       }
     }
     if (!allSuccess) {
-      console.error("Cache test failed. Exiting.");
+      console.error("Authentication test failed. Exiting.");
       process.exit(1);
     } else {
-      console.log(`    ... cache test success!`);
+      console.log(`    ... authentication test success!`);
     }
   }
 
