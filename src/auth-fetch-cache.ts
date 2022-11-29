@@ -234,6 +234,12 @@ export class AuthFetchCache {
           );
         } else {
           const body = await res.text();
+          if (!body) {
+            console.error(
+              `         Authentication test failed for user ${userIndex}: no body`
+            );
+            allSuccess = false;
+          }
         }
       } catch (e) {
         allSuccess = false;
