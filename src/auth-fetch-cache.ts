@@ -202,6 +202,56 @@ export class AuthFetchCache {
     }
   }
 
+  async test(
+    userCount: number,
+    cssBaseUrl: string,
+    filename: string,
+    fetchTimeoutMs: number
+  ) {
+    if (this.authenticateCache === "none") {
+      return;
+    }
+
+    console.log(
+      `Testing cache of ${userCount} user logins (cache method="${this.authenticateCache}")...`
+    );
+
+    let allSuccess = true;
+    for (let userIndex = 0; userIndex < userCount; userIndex++) {
+      const account = `user${userIndex}`;
+      try {
+        const aFetch = await this.getAuthFetcher(userIndex);
+        const res: AnyFetchResponseType = await aFetch(
+          `${cssBaseUrl}${account}/${filename}`,
+          {
+            method: "GET",
+            //open bug in nodejs typescript that AbortSignal.timeout doesn't work
+            //  see https://github.com/node-fetch/node-fetch/issues/741
+            // @ts-ignore
+            signal: AbortSignal.timeout(fetchTimeoutMs), // abort after 4 seconds //supported in nodejs>=17.3
+          }
+        );
+        if (!res.ok) {
+          allSuccess = false;
+          console.error(
+            `         Cache test failed for user ${userIndex}. HTTP status ${res.status}`
+          );
+        } else {
+          const body = await res.text();
+        }
+      } catch (e) {
+        allSuccess = false;
+        console.error(`         Cache test exception for user ${userIndex}`, e);
+      }
+    }
+    if (!allSuccess) {
+      console.error("Cache test failed. Exiting.");
+      process.exit(1);
+    } else {
+      console.log(`    ... cache test success!`);
+    }
+  }
+
   // cssBaseUrl: string;
   // authenticateCache: "none" | "token" | "all" = "none";
   // authenticate: boolean = false;
