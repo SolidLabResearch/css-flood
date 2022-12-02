@@ -6,6 +6,7 @@ import {
 import { ResponseError } from "./error.js";
 import { AnyFetchResponseType, AnyFetchType } from "./generic-fetch.js";
 import { DurationCounter } from "./duration-counter.js";
+import { KeyPair } from "@inrupt/solid-client-authn-core/src/authenticatedFetch/dpopUtils";
 
 function accountEmail(account: string): string {
   return `${account}@example.org`;
@@ -17,6 +18,7 @@ export interface UserToken {
 }
 export interface AccessToken {
   token: string;
+  dpopKeyPair: KeyPair;
   expire: Date;
 }
 export async function createUserToken(
@@ -87,33 +89,52 @@ export async function getUserAuthFetch(
   fetcher: AnyFetchType = fetch,
   accessTokenDurationCounter: DurationCounter | null = null,
   fetchDurationCounter: DurationCounter | null = null,
+  generateDpopKeyPairDurationCounter: DurationCounter | null = null,
   accessToken: AccessToken | null = null
 ): Promise<[AnyFetchType, AccessToken]> {
   //see https://github.com/CommunitySolidServer/CommunitySolidServer/blob/main/documentation/markdown/usage/client-credentials.md
   const { id, secret } = token;
 
-  const dpopKey = await generateDpopKeyPair();
-  const authString = `${encodeURIComponent(id)}:${encodeURIComponent(secret)}`;
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
-  const url = `${cssBaseUrl}.oidc/token`; //ideally, fetch this from token_endpoint in .well-known/openid-configuration
-
-  const accessTokenDurationStart = new Date().getTime();
+  let accessTokenDurationStart = null;
   try {
     if (accessToken === null || !stillUsableAccessToken(accessToken)) {
+      const generateDpopKeyPairDurationStart = new Date().getTime();
+      const dpopKeyPair = await generateDpopKeyPair();
+      const authString = `${encodeURIComponent(id)}:${encodeURIComponent(
+        secret
+      )}`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const url = `${cssBaseUrl}.oidc/token`; //ideally, fetch this from token_endpoint in .well-known/openid-configuration
+      if (generateDpopKeyPairDurationCounter !== null) {
+        generateDpopKeyPairDurationCounter.addDuration(
+          new Date().getTime() - generateDpopKeyPairDurationStart
+        );
+      }
+
+      accessTokenDurationStart = new Date().getTime();
       const res = await fetcher(url, {
         method: "POST",
         headers: {
           authorization: `Basic ${Buffer.from(authString).toString("base64")}`,
           "content-type": "application/x-www-form-urlencoded",
-          dpop: await createDpopHeader(url, "POST", dpopKey),
+          dpop: await createDpopHeader(url, "POST", dpopKeyPair),
         },
         body: "grant_type=client_credentials&scope=webid",
         signal: controller.signal,
       });
 
       const body = await res.text();
+      if (
+        accessTokenDurationCounter !== null &&
+        accessTokenDurationStart !== null
+      ) {
+        accessTokenDurationCounter.addDuration(
+          new Date().getTime() - accessTokenDurationStart
+        );
+        accessTokenDurationStart = null;
+      }
       if (!res.ok) {
         // if (body.includes(`Could not create access token for ${account}`)) {
         //     //ignore
@@ -131,7 +152,11 @@ export async function getUserAuthFetch(
       const expire = new Date(
         new Date().getTime() + parseInt(expiresIn) * 1000
       );
-      accessToken = { token: accessTokenStr, expire: expire };
+      accessToken = {
+        token: accessTokenStr,
+        expire: expire,
+        dpopKeyPair: dpopKeyPair,
+      };
     }
   } catch (error: any) {
     if (error.name === "AbortError") {
@@ -139,7 +164,10 @@ export async function getUserAuthFetch(
     }
     throw error;
   } finally {
-    if (accessTokenDurationCounter !== null) {
+    if (
+      accessTokenDurationCounter !== null &&
+      accessTokenDurationStart !== null
+    ) {
       accessTokenDurationCounter.addDuration(
         new Date().getTime() - accessTokenDurationStart
       );
@@ -152,7 +180,7 @@ export async function getUserAuthFetch(
       // @ts-ignore
       fetcher,
       accessToken.token,
-      { dpopKey }
+      { dpopKey: accessToken.dpopKeyPair }
     );
     // console.log(`Created Access Token using CSS token:`);
     // console.log(`account=${account}`);

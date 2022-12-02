@@ -12,6 +12,7 @@ import {
 } from "./generic-fetch.js";
 import { DurationCounter } from "./duration-counter.js";
 import { promises as fs } from "fs";
+import * as jose from "jose";
 
 export class AuthFetchCache {
   cssBaseUrl: string;
@@ -29,6 +30,7 @@ export class AuthFetchCache {
   tokenFetchDuration = new DurationCounter();
   authAccessTokenDuration = new DurationCounter();
   authFetchDuration = new DurationCounter();
+  generateDpopKeyPairDurationCounter = new DurationCounter();
 
   fetcher: AnyFetchType;
 
@@ -85,6 +87,7 @@ export class AuthFetchCache {
         this.fetcher,
         this.authAccessTokenDuration,
         this.authFetchDuration,
+        this.generateDpopKeyPairDurationCounter,
         accessToken
       );
       this.authFetchCount++;
@@ -120,9 +123,18 @@ export class AuthFetchCache {
 
       const account = `user${userIndex}`;
 
-      console.log(`   Pre-cache is authenticating user ${userIndex}...`);
+      process.stdout.write(
+        `   Pre-cache is authenticating user ${
+          userIndex + 1
+        }/${userCount}...                                        \r`
+      );
       let token = this.cssTokensByUser[userIndex];
       if (!token) {
+        process.stdout.write(
+          `   Pre-cache is authenticating user ${
+            userIndex + 1
+          }/${userCount}... fetching user token...\r`
+        );
         token = await createUserToken(
           this.cssBaseUrl,
           account,
@@ -135,6 +147,11 @@ export class AuthFetchCache {
       }
 
       if (this.authenticateCache === "all") {
+        process.stdout.write(
+          `   Pre-cache is authenticating user ${
+            userIndex + 1
+          }/${userCount}... fetching access token...\r`
+        );
         const [fetch, accessToken] = await getUserAuthFetch(
           this.cssBaseUrl,
           account,
@@ -142,6 +159,7 @@ export class AuthFetchCache {
           this.fetcher,
           this.authAccessTokenDuration,
           this.authFetchDuration,
+          this.generateDpopKeyPairDurationCounter,
           this.authAccessTokenByUser[userIndex]
         );
         this.authAccessTokenByUser[userIndex] = accessToken;
@@ -149,6 +167,7 @@ export class AuthFetchCache {
         this.authFetchCount++;
       }
     }
+    process.stdout.write(`\n`);
   }
 
   validate(userCount: number) {
@@ -163,6 +182,9 @@ export class AuthFetchCache {
     const now = new Date();
     let allValid = true;
     for (let userIndex = 0; userIndex < userCount; userIndex++) {
+      process.stdout.write(
+        `   Validating user ${userIndex + 1}/${userCount}...\r`
+      );
       this.authFetchersByUser[userIndex] = null;
       const account = `user${userIndex}`;
 
@@ -194,6 +216,7 @@ export class AuthFetchCache {
         allValid = false;
       }
     }
+    process.stdout.write(`\n`);
     if (!allValid) {
       console.error("Cache validation failed. Exiting.");
       process.exit(1);
@@ -215,6 +238,9 @@ export class AuthFetchCache {
     let allSuccess = true;
     for (let userIndex = 0; userIndex < userCount; userIndex++) {
       const account = `user${userIndex}`;
+      process.stdout.write(
+        `   Testing user ${userIndex + 1}/${userCount}...\r`
+      );
       try {
         const aFetch = await this.getAuthFetcher(userIndex);
         const res: AnyFetchResponseType = await aFetch(
@@ -249,6 +275,7 @@ export class AuthFetchCache {
         );
       }
     }
+    process.stdout.write(`\n`);
     if (!allSuccess) {
       console.error("Authentication test failed. Exiting.");
       process.exit(1);
@@ -269,6 +296,7 @@ export class AuthFetchCache {
                 authenticateCache=${this.authenticateCache}, 
                 authenticate=${this.authenticate}, 
                 cssTokensByUser.length=${this.cssTokensByUser.length}, 
+                authAccessTokenByUser.length=${this.authAccessTokenByUser.length}, 
                 authFetchersByUser.length=${this.authFetchersByUser.length}, 
                 useCount=${this.useCount}, 
                 tokenFetchCount=${this.tokenFetchCount}, 
@@ -281,11 +309,24 @@ export class AuthFetchCache {
   }
 
   async save(authCacheFile: string) {
-    const accessTokenForJson = [...this.authAccessTokenByUser].map(
-      (accessToken) =>
+    const accessTokenForJson = await Promise.all(
+      [...this.authAccessTokenByUser].map(async (accessToken) =>
         !accessToken
           ? null
-          : { token: accessToken.token, expire: accessToken.expire.getTime() }
+          : {
+              token: accessToken.token,
+              expire: accessToken.expire.getTime(),
+              dpopKeyPair: {
+                publicKey: accessToken.dpopKeyPair.publicKey, //already a JWK
+                privateKeyType: accessToken.dpopKeyPair.privateKey.type,
+                // @ts-ignore
+                privateKey: await jose.exportPKCS8(
+                  // @ts-ignore
+                  accessToken.dpopKeyPair.privateKey
+                ),
+              },
+            }
+      )
     );
     const c = {
       cssTokensByUser: this.cssTokensByUser,
@@ -302,6 +343,14 @@ export class AuthFetchCache {
     this.authAccessTokenByUser = c.authAccessTokenByUser;
     for (const accessToken of this.authAccessTokenByUser.values()) {
       if (accessToken) {
+        //because we got if from JSON, accessToken.dpopKeyPair.privateKey will be PKCS8, not a KeyLike!
+        accessToken.dpopKeyPair.privateKey = await jose.importPKCS8(
+          // @ts-ignore
+          accessToken.dpopKeyPair.privateKey,
+          // @ts-ignore
+          accessToken.dpopKeyPair.privateKeyType
+        );
+
         //because we got if from JSON, accessToken.expire will be a string, not a Date!
         // @ts-ignore
         if (typeof accessToken.expire === "number") {

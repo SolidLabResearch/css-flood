@@ -374,7 +374,11 @@ async function main() {
         authFetchCache.authFetchDuration.min
       } max=${
         authFetchCache.authFetchDuration.max
-      } avg=${authFetchCache.authFetchDuration.avg()} (flawed method!)`
+      } avg=${authFetchCache.authFetchDuration.avg()} (flawed method!)\nAuth Duration Statistics geenrating Dpop KeyPair: min=${
+        authFetchCache.generateDpopKeyPairDurationCounter.min
+      } max=${
+        authFetchCache.generateDpopKeyPairDurationCounter.max
+      } avg=${authFetchCache.generateDpopKeyPairDurationCounter.avg()} (flawed method!)`
     );
   };
 
