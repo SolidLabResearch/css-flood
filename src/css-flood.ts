@@ -482,29 +482,79 @@ async function main() {
     );
   };
 
+  const authCacheStatsToObj = function () {
+    return {
+      warning:
+        "Flawed method! " +
+        "You can't accurately time async calls. " +
+        "But the inaccuracies are probably neglectable.",
+      getchingUserTokenDuration: {
+        min: authFetchCache.tokenFetchDuration.min,
+        max: authFetchCache.tokenFetchDuration.max,
+        avg: authFetchCache.tokenFetchDuration.avg(),
+      },
+      authAccessTokenDuration: {
+        min: authFetchCache.authAccessTokenDuration.min,
+        max: authFetchCache.authAccessTokenDuration.max,
+        avg: authFetchCache.authAccessTokenDuration.avg(),
+      },
+      buildingAuthFetcherDuration: {
+        min: authFetchCache.authFetchDuration.min,
+        max: authFetchCache.authFetchDuration.max,
+        avg: authFetchCache.authFetchDuration.avg(),
+      },
+      generateDpopKeyPairDuration: {
+        min: authFetchCache.generateDpopKeyPairDurationCounter.min,
+        max: authFetchCache.generateDpopKeyPairDurationCounter.max,
+        avg: authFetchCache.generateDpopKeyPairDurationCounter.avg(),
+      },
+    };
+  };
+
   if (!steps.includes("flood")) {
     printAuthCacheStats();
+    console.log(
+      "AUTHENTICATION CACHE STATISTICS:\n---\n" +
+        JSON.stringify({
+          authFetchCache: {
+            stats: authFetchCache.toStatsObj(),
+            durations: authCacheStatsToObj(),
+          },
+        }) +
+        "\n---\n\n"
+    );
     console.log(`--steps does not include flood: will exit now`);
     process.exit(0);
   }
 
   let counter = new Counter();
   const printFinal = function () {
-    console.log(`authFetchCache=${authFetchCache}`);
+    const stats = {
+      authFetchCache: {
+        stats: authFetchCache.toStatsObj(),
+        durations: authCacheStatsToObj(),
+      },
+      fetchStatistics: {
+        total: counter.total,
+        success: counter.success,
+        failure: counter.failure,
+        exceptions: counter.exceptions,
+        statuses: counter.statuses,
+        timeout: counter.timeout,
+      },
+      durationStatistics: {
+        warning:
+          "Flawed method! " +
+          "You can't accurately time async calls. " +
+          "But the inaccuracies are probably neglectable.",
+        min: counter.success_duration_ms.min,
+        max: counter.success_duration_ms.max,
+        avg: counter.success_duration_ms.avg(),
+      },
+    };
     console.log(
-      `Fetch Statistics: total=${counter.total} success=${
-        counter.success
-      } failure=${counter.failure} exceptions=${
-        counter.exceptions
-      } statuses=${JSON.stringify(counter.statuses)} timeout=${counter.timeout}`
+      "FINAL STATISTICS:\n---\n" + JSON.stringify(stats) + "\n---\n\n"
     );
-    //print stats, but warn that the method is flawed: you can't accurately time async calls. (But the inaccuracies are probably neglectable.)
-    console.log(
-      `Fetch Duration Statistics: min=${counter.success_duration_ms.min} max=${
-        counter.success_duration_ms.max
-      } avg=${counter.success_duration_ms.avg()} (flawed method!)`
-    );
-    printAuthCacheStats();
   };
 
   process.on("SIGINT", function () {

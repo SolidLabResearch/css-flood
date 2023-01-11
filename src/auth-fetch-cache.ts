@@ -304,6 +304,20 @@ export class AuthFetchCache {
             }`;
   }
 
+  toStatsObj(): object {
+    return {
+      cssBaseUrl: this.cssBaseUrl,
+      authenticateCache: this.authenticateCache,
+      authenticate: this.authenticate,
+      lenCssTokensByUser: this.cssTokensByUser.length,
+      lenAuthAccessTokenByUser: this.authAccessTokenByUser.length,
+      lenAuthFetchersByUser: this.authFetchersByUser.length,
+      useCount: this.useCount,
+      tokenFetchCount: this.tokenFetchCount,
+      authFetchCount: this.authFetchCount,
+    };
+  }
+
   toCountString(): string {
     return `${this.cssTokensByUser.length} userTokens and ${this.authAccessTokenByUser.length} authAccessTokens`;
   }
