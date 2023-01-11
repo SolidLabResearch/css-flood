@@ -14,45 +14,45 @@ import {
 import { DurationCounter } from "./duration-counter.js";
 import * as fs from "fs";
 
-const argv = yargs(hideBin(process.argv))
+let ya = yargs(hideBin(process.argv))
   .option("url", {
-    alias: "u",
+    // alias: "u",
     type: "string",
     description: "Base URL of the CSS",
     demandOption: true,
   })
   .option("duration", {
-    alias: "fc",
+    // alias: "fc",
     type: "number",
     description:
-      "Total duration (in seconds) of the test. After this time, no new fetches are done. " +
+      "Total duration (in seconds) of the flood. After this time, no new fetches are done. " +
       "If this option is used, --fetch-count is ignored." +
       "Default: run until all requested fetches are done.",
     demandOption: false,
   })
   .option("fetchCount", {
-    alias: "fc",
+    // alias: "fc",
     type: "number",
-    description: "Number of fetches per user",
+    description: "Number of fetches per user during the flood.",
     demandOption: false,
     default: 10,
   })
   .option("parallel", {
-    alias: "pc",
+    // alias: "pc",
     type: "number",
-    description: "Number of fetches in parallel",
+    description: "Number of fetches in parallel during the flood.",
     demandOption: false,
     default: 10,
   })
   .option("userCount", {
-    alias: "uc",
+    // alias: "uc",
     type: "number",
     description: "Number of users",
     demandOption: false,
     default: 10,
   })
   .option("fetchTimeoutMs", {
-    alias: "t",
+    // alias: "t",
     type: "number",
     description:
       "How long before aborting a fetch because it takes too long? (in ms)",
@@ -60,22 +60,42 @@ const argv = yargs(hideBin(process.argv))
     default: 4_000,
   })
   .option("filename", {
-    alias: "f",
+    // alias: "f",
     type: "string",
-    description: "File to download from pod",
+    description:
+      "Remote file to download from pod, or filename of file to upload to pod",
     default: "dummy.txt",
   })
-  .option("authenticate", {
-    alias: "a",
+  .option("filenameIndexing", {
     type: "boolean",
-    description: "Authenticated as the user owning the file",
+    description:
+      "Replace the literal string 'INDEX' in the filename for each action (upload/download). " +
+      "This way, each fetch uses a unique filename. Index will start from 0 and increment.",
+    default: false,
+  })
+  .option("uploadSizeByte", {
+    type: "number",
+    description: "Number of bytes of (random) data to upload for POST/PUT",
+    default: 10,
+  })
+  .option("verb", {
+    // alias: "v",
+    type: "string",
+    choices: ["GET", "PUT", "POST", "DELETE"],
+    description: "HTTP verb to use for the flood: GET/PUT/POST/DELETE",
+    default: "GET",
+  })
+  .option("authenticate", {
+    // alias: "a",
+    type: "boolean",
+    description: "Authenticated as the user owning the target file",
     default: false,
   })
   .option("authenticateCache", {
     type: "string",
     choices: ["none", "token", "all"],
     description:
-      "For each user, cache all authentication, or only the CSS token, or authenticate fully each time.",
+      "How much authentication should be cached? All authentication (=all)? Only the CSS user token (=token)? Or no caching (=none)?",
     default: "all",
   })
   .option("fetchVersion", {
@@ -87,46 +107,111 @@ const argv = yargs(hideBin(process.argv))
   })
   .option("authCacheFile", {
     type: "string",
-    description: "File to load/save the auth cache from/to",
+    description: "File to load/save the authentication cache from/to",
   })
-  .option("loadAuthCacheFile", {
-    type: "boolean",
-    description: "Load the auth cache from file before doing anything else?",
-    default: false,
+  .epilogue(
+    `Details for --steps:
+    
+css-flood performs one or more steps in a fixed order. 
+--steps selects which steps run (and which don't).
+
+A lot of these steps are related to the "Authentication Cache".
+Note that this cache is not used if authentication is disabled.
+How much the authentication cache caches, can also be configured with the --authenticateCache option.
+The file used to load/save the authentication cache is controlled by the --authCacheFile option.
+
+The steps that can run are (always in this order):
+
+- loadAC: Load the authentication cache from file.
+- fillAC: Perform authentication of all users, which fills the authentication cache.
+- validateAC: Check if all entries in the authentication cache are up to date. 
+              This step causes exit with code 1 if there is at least one cache entry that has expired.
+- testRequests: Do 1 request (typically a GET to download a file) for each users (back-to-back, not in parallel). 
+                This tests both the data in the authentication cache (adding missing entries), and the actual request.
+- saveAC: Save the authentication cache to file.
+- flood: Run the actual "flood": generate load on the target CSS by running a number of requests in parallel.
+
+Examples:
+--steps 'loadAC,validateAC,flood'
+--steps 'fillAC,saveAC'
+--steps 'loadAC,fillAC,saveAC'
+--steps 'loadAC,testDownload,saveAC,flood'
+
+All steps (makes little sense):
+--steps 'loadAC,fillAC,validateAC,testDownload,saveAC,flood'
+
+`
+  )
+  .option("steps", {
+    type: "string",
+    description: `The steps that need to run, as a comma separated list. See below for more details.`,
+    default: "flood",
   })
-  .option("validateAuthCache", {
-    type: "boolean",
-    demandOption: false,
-    description:
-      "Validate the auth cache loaded from file before doing anything else? (default: auto based on --loadAuthCacheFile and --preCacheAuth)",
-  })
-  .option("testAuth", {
-    type: "boolean",
-    demandOption: false,
-    description:
-      "Test the authentication before doing anything else? This attempts to download a file with each user, using the authentication cache. (default: false)",
-  })
-  .option("saveAuthCacheFile", {
-    type: "boolean",
-    description:
-      "Save the auth cache to file? (After pre-caching and after full run)",
-    default: false,
-  })
-  .option("preCacheAuth", {
-    type: "boolean",
-    description: "Pre-cache the authentication before starting?",
-    default: false,
-  })
-  .option("onlyPreCacheAuth", {
-    type: "boolean",
-    description: "Stop directly after pre-caching (and optionally saving)",
-    default: false,
+  .coerce("steps", (arg) => {
+    const res = arg.split(",");
+    const allowedSteps = [
+      "loadAC",
+      "fillAC",
+      "validateAC",
+      "testDownload",
+      "saveAC",
+      "flood",
+    ];
+    for (const step of res) {
+      if (!allowedSteps.includes(step)) {
+        throw new Error(`${step} is not an known step`);
+      }
+    }
+    return res;
   })
   .help()
-  .parseSync();
+  .wrap(120);
 
-const cssBaseUrl = argv.url.endsWith("/") ? argv.url : argv.url + "/";
-const podFilename = argv.filename;
+// ya = ya.wrap(ya.terminalWidth());
+const argv = ya.parseSync();
+
+enum HttpVerb {
+  GET = "GET",
+  PUT = "PUT",
+  POST = "POST",
+  DELETE = "DELETE",
+}
+
+const cssBaseUrl: string = argv.url.endsWith("/") ? argv.url : argv.url + "/";
+const podFilename: string = argv.filename;
+const filenameIndexing: boolean = argv.filenameIndexing;
+const httpVerb: HttpVerb = <HttpVerb>argv.verb;
+const mustUpload = httpVerb == "POST" || httpVerb == "PUT";
+const uploadSizeByte: number = argv.uploadSizeByte;
+
+let curIndex = 0;
+function getUniqueIndex(): number {
+  //no need at this point to use any fancy atomic operations. This is single threaded, so it is safe.
+  return curIndex++;
+}
+
+function generateUploadData(
+  httpVerb: HttpVerb,
+  uploadSizeByte: number
+): ArrayBuffer {
+  const res = new Uint8Array(uploadSizeByte);
+  const startTime = new Date().getTime();
+
+  crypto.getRandomValues(res);
+  // for (let i = 0; i < uploadSizeByte; i++) {
+  //   res[i] = 0;
+  // }
+
+  const durationMs = new Date().getTime() - startTime;
+  console.debug(
+    `Generating random data for upload took ${durationMs}ms (for ${uploadSizeByte} bytes)`
+  );
+  return res;
+}
+
+const uploadData = mustUpload
+  ? generateUploadData(httpVerb, uploadSizeByte)
+  : null;
 
 interface StatusNumberInfo {
   [status: number]: number;
@@ -194,7 +279,9 @@ async function fetchPodFile(
   podFileRelative: string,
   counter: Counter,
   authFetchCache: AuthFetchCache,
-  fetchTimeoutMs: number
+  fetchTimeoutMs: number,
+  httpVerb: HttpVerb,
+  filenameIndexing: boolean
 ) {
   try {
     const account = `user${userIndex}`;
@@ -202,15 +289,29 @@ async function fetchPodFile(
     // console.log(`   Will fetch file from account ${account}, pod path "${podFileRelative}"`);
     counter.total++;
     const startedFetch = new Date().getTime();
+
+    const options: any = {
+      method: httpVerb,
+      //open bug in nodejs typescript that AbortSignal.timeout doesn't work
+      //  see https://github.com/node-fetch/node-fetch/issues/741
+      // @ts-ignore
+      signal: AbortSignal.timeout(fetchTimeoutMs), // abort after 4 seconds //supported in nodejs>=17.3
+    };
+
+    if (mustUpload) {
+      options.headers = {
+        "Content-type": "application/octet-stream",
+      };
+      options.body = uploadData;
+    }
+
+    if (filenameIndexing) {
+      podFileRelative = podFileRelative.replace("INDEX", `${getUniqueIndex()}`);
+    }
+
     const res: AnyFetchResponseType = await aFetch(
       `${cssBaseUrl}${account}/${podFileRelative}`,
-      {
-        method: "GET",
-        //open bug in nodejs typescript that AbortSignal.timeout doesn't work
-        //  see https://github.com/node-fetch/node-fetch/issues/741
-        // @ts-ignore
-        signal: AbortSignal.timeout(fetchTimeoutMs), // abort after 4 seconds //supported in nodejs>=17.3
-      }
+      options
     );
     // console.log(`res.ok`, res.ok);
     // console.log(`res.status`, res.status);
@@ -234,8 +335,14 @@ async function fetchPodFile(
         counter.success++;
         counter.success_duration_ms.addDuration(stoppedFetch - startedFetch);
       } else {
-        console.warn("successful fetch, but no body!");
-        counter.failure++;
+        if (httpVerb == "GET") {
+          console.warn("successful fetch GET, but no body!");
+          counter.failure++;
+        } else {
+          const stoppedFetch = new Date().getTime();
+          counter.success++;
+          counter.success_duration_ms.addDuration(stoppedFetch - startedFetch);
+        }
       }
     }
   } catch (e: any) {
@@ -299,19 +406,8 @@ async function main() {
   const authenticate = argv.authenticate || false;
   const useNodeFetch = argv.fetchVersion == "node" || false;
   const authCacheFile = argv.authCacheFile || null;
-  const loadAuthCacheFile = argv.loadAuthCacheFile || false;
-  const saveAuthCacheFile = argv.saveAuthCacheFile || false;
-  const onlyPreCacheAuth = argv.onlyPreCacheAuth || false;
-  const preCacheAuth = argv.preCacheAuth || argv.onlyPreCacheAuth || false; //onlyPreCacheAuth implies preCacheAuth
-  const validateAuthCache =
-    argv.validateAuthCache === true
-      ? true
-      : argv.validateAuthCache == false
-      ? false
-      : onlyPreCacheAuth || preCacheAuth
-      ? false
-      : argv.loadAuthCacheFile; //fallback to same as loadAuthCacheFile if not preCacheAuth
-  const testAuth = argv.testAuth || false;
+
+  const steps: string[] = argv.steps.split(",");
 
   const requests = [];
   const promises = [];
@@ -325,13 +421,17 @@ async function main() {
     fetcher
   );
 
-  if (loadAuthCacheFile && authCacheFile && fs.existsSync(authCacheFile)) {
+  if (
+    steps.includes("loadAC") &&
+    authCacheFile &&
+    fs.existsSync(authCacheFile)
+  ) {
     console.log(`Loading auth cache from '${authCacheFile}'`);
     await authFetchCache.load(authCacheFile);
     console.log(`Auth cache now has '${authFetchCache.toCountString()}'`);
   }
 
-  if (authenticate && preCacheAuth) {
+  if (authenticate && steps.includes("fillAC")) {
     const preCacheStart = new Date().getTime();
     await authFetchCache.preCache(userCount);
     const preCacheStop = new Date().getTime();
@@ -341,10 +441,10 @@ async function main() {
     console.log(`Auth cache now has '${authFetchCache.toCountString()}'`);
   }
 
-  if (authenticate && validateAuthCache) {
+  if (authenticate && steps.includes("validateAC")) {
     authFetchCache.validate(userCount);
   }
-  if (authenticate && testAuth) {
+  if (authenticate && steps.includes("testRequests")) {
     await authFetchCache.test(
       userCount,
       cssBaseUrl,
@@ -355,7 +455,7 @@ async function main() {
 
   console.log(`userCount=${userCount} authFetchCache=${authFetchCache}`);
 
-  if (saveAuthCacheFile && authCacheFile) {
+  if (steps.includes("saveAC") && authCacheFile) {
     console.log(`Saving auth cache to '${authCacheFile}'`);
     await authFetchCache.save(authCacheFile);
   }
@@ -382,9 +482,9 @@ async function main() {
     );
   };
 
-  if (onlyPreCacheAuth) {
+  if (!steps.includes("flood")) {
     printAuthCacheStats();
-    console.log(`--onlyPreCacheAuth set: will exit now`);
+    console.log(`--steps does not include flood: will exit now`);
     process.exit(0);
   }
 
@@ -431,7 +531,9 @@ async function main() {
         podFilename,
         counter,
         authFetchCache,
-        fetchTimeoutMs
+        fetchTimeoutMs,
+        httpVerb,
+        filenameIndexing
       );
     };
     for (let p = 0; p < parallel; p++) {
@@ -464,7 +566,15 @@ async function main() {
     for (let i = 0; i < fetchCount; i++) {
       for (let j = 0; j < userCount; j++) {
         requests.push(() =>
-          fetchPodFile(j, podFilename, counter, authFetchCache, fetchTimeoutMs)
+          fetchPodFile(
+            j,
+            podFilename,
+            counter,
+            authFetchCache,
+            fetchTimeoutMs,
+            httpVerb,
+            filenameIndexing
+          )
         );
       }
     }
