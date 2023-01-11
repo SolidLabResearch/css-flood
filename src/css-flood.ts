@@ -407,7 +407,7 @@ async function main() {
   const useNodeFetch = argv.fetchVersion == "node" || false;
   const authCacheFile = argv.authCacheFile || null;
 
-  const steps: string[] = argv.steps.split(",");
+  const steps: string[] = argv.steps;
 
   const requests = [];
   const promises = [];
@@ -460,28 +460,6 @@ async function main() {
     await authFetchCache.save(authCacheFile);
   }
 
-  const printAuthCacheStats = function () {
-    console.log(
-      `Auth Duration Statistics fetching user token: min=${
-        authFetchCache.tokenFetchDuration.min
-      } max=${
-        authFetchCache.tokenFetchDuration.max
-      } avg=${authFetchCache.tokenFetchDuration.avg()} (flawed method!)\nAuth Duration Statistics fetching access token: min=${
-        authFetchCache.authAccessTokenDuration.min
-      } max=${
-        authFetchCache.authAccessTokenDuration.max
-      } avg=${authFetchCache.authAccessTokenDuration.avg()} (flawed method!)\nAuth Duration Statistics building fetcher: min=${
-        authFetchCache.authFetchDuration.min
-      } max=${
-        authFetchCache.authFetchDuration.max
-      } avg=${authFetchCache.authFetchDuration.avg()} (flawed method!)\nAuth Duration Statistics generating Dpop KeyPair: min=${
-        authFetchCache.generateDpopKeyPairDurationCounter.min
-      } max=${
-        authFetchCache.generateDpopKeyPairDurationCounter.max
-      } avg=${authFetchCache.generateDpopKeyPairDurationCounter.avg()} (flawed method!)`
-    );
-  };
-
   const authCacheStatsToObj = function () {
     return {
       warning:
@@ -512,7 +490,6 @@ async function main() {
   };
 
   if (!steps.includes("flood")) {
-    printAuthCacheStats();
     console.log(
       "AUTHENTICATION CACHE STATISTICS:\n---\n" +
         JSON.stringify({
