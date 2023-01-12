@@ -15,12 +15,20 @@ import { DurationCounter } from "./duration-counter.js";
 import * as fs from "fs";
 
 let ya = yargs(hideBin(process.argv))
+  .usage("Usage: $0 --url <url> [--steps <steps>] ...")
+  //general options
   .option("url", {
     // alias: "u",
     type: "string",
     description: "Base URL of the CSS",
     demandOption: true,
   })
+  .option("steps", {
+    type: "string",
+    description: `The steps that need to run, as a comma separated list. See below for more details.`,
+    default: "flood",
+  })
+  //flood config
   .option("duration", {
     // alias: "fc",
     type: "number",
@@ -85,6 +93,7 @@ let ya = yargs(hideBin(process.argv))
     description: "HTTP verb to use for the flood: GET/PUT/POST/DELETE",
     default: "GET",
   })
+  //authentication
   .option("authenticate", {
     // alias: "a",
     type: "boolean",
@@ -98,16 +107,17 @@ let ya = yargs(hideBin(process.argv))
       "How much authentication should be cached? All authentication (=all)? Only the CSS user token (=token)? Or no caching (=none)?",
     default: "all",
   })
+  .option("authCacheFile", {
+    type: "string",
+    description: "File to load/save the authentication cache from/to",
+  })
+  //advanced
   .option("fetchVersion", {
     type: "string",
     choices: ["node", "es6"],
     description:
       "Use node-fetch or ES6 fetch (ES6 fetch is only available for nodejs versions >= 18)",
     default: "node",
-  })
-  .option("authCacheFile", {
-    type: "string",
-    description: "File to load/save the authentication cache from/to",
   })
   .epilogue(
     `Details for --steps:
@@ -142,11 +152,6 @@ All steps (makes little sense):
 
 `
   )
-  .option("steps", {
-    type: "string",
-    description: `The steps that need to run, as a comma separated list. See below for more details.`,
-    default: "flood",
-  })
   .coerce("steps", (arg) => {
     const res = arg.split(",");
     const allowedSteps = [

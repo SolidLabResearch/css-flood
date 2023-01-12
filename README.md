@@ -34,9 +34,13 @@ css-flood --help
 Help:
 
 ```
+Usage: css-flood --url <url> [--steps <steps>] ...
+
 Options:
   --version            Show version number                                                                     [boolean]
   --url                Base URL of the CSS                                                           [string] [required]
+  --steps              The steps that need to run, as a comma separated list. See below for more details.
+                                                                                             [string] [default: "flood"]
   --duration           Total duration (in seconds) of the flood. After this time, no new fetches are done. If this optio
                        n is used, --fetch-count is ignored.Default: run until all requested fetches are done.   [number]
   --fetchCount         Number of fetches per user during the flood.                               [number] [default: 10]
@@ -54,11 +58,9 @@ Options:
   --authenticate       Authenticated as the user owning the target file                       [boolean] [default: false]
   --authenticateCache  How much authentication should be cached? All authentication (=all)? Only the CSS user token (=to
                        ken)? Or no caching (=none)?          [string] [choices: "none", "token", "all"] [default: "all"]
+  --authCacheFile      File to load/save the authentication cache from/to                                       [string]
   --fetchVersion       Use node-fetch or ES6 fetch (ES6 fetch is only available for nodejs versions >= 18)
                                                                      [string] [choices: "node", "es6"] [default: "node"]
-  --authCacheFile      File to load/save the authentication cache from/to                                       [string]
-  --steps              The steps that need to run, as a comma separated list. See below for more details.
-                                                                                             [string] [default: "flood"]
   --help               Show help                                                                               [boolean]
 
 Details for --steps:
