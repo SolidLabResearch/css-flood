@@ -13,6 +13,7 @@ import {
 } from "./generic-fetch.js";
 import { DurationCounter } from "./duration-counter.js";
 import * as fs from "fs";
+import { promises as afs } from "fs";
 
 let ya = yargs(hideBin(process.argv))
   .usage("Usage: $0 --url <url> [--steps <steps>] ...")
@@ -27,6 +28,11 @@ let ya = yargs(hideBin(process.argv))
     type: "string",
     description: `The steps that need to run, as a comma separated list. See below for more details.`,
     default: "flood",
+  })
+  .option("reportFile", {
+    type: "string",
+    description:
+      "File to save report to (JSON format). Of not specified, the report is sent to stdout like the other output.",
   })
   //flood config
   .option("duration", {
@@ -411,6 +417,7 @@ async function main() {
   const authenticate = argv.authenticate || false;
   const useNodeFetch = argv.fetchVersion == "node" || false;
   const authCacheFile = argv.authCacheFile || null;
+  const reportFile = argv.reportFile || null;
 
   const steps: string[] = argv.steps;
 
@@ -495,23 +502,29 @@ async function main() {
   };
 
   if (!steps.includes("flood")) {
-    console.log(
-      "AUTHENTICATION CACHE STATISTICS:\n---\n" +
-        JSON.stringify({
-          authFetchCache: {
-            stats: authFetchCache.toStatsObj(),
-            durations: authCacheStatsToObj(),
-          },
-        }) +
-        "\n---\n\n"
-    );
+    const reportObj = {
+      authFetchCache: {
+        stats: authFetchCache.toStatsObj(),
+        durations: authCacheStatsToObj(),
+      },
+    };
+    const reportContent = JSON.stringify(reportObj);
+    if (!reportFile) {
+      console.log(
+        "AUTHENTICATION CACHE STATISTICS:\n---\n" + reportContent + "\n---\n\n"
+      );
+    } else {
+      console.log(`Writing report to '${reportFile}'...`);
+      await afs.writeFile(reportFile, reportContent);
+      console.log(`Report saved`);
+    }
     console.log(`--steps does not include flood: will exit now`);
     process.exit(0);
   }
 
   let counter = new Counter();
-  const printFinal = function () {
-    const stats = {
+  const printFinal = async function () {
+    const reportObj = {
       authFetchCache: {
         stats: authFetchCache.toStatsObj(),
         durations: authCacheStatsToObj(),
@@ -534,17 +547,21 @@ async function main() {
         avg: counter.success_duration_ms.avg(),
       },
     };
-    console.log(
-      "FINAL STATISTICS:\n---\n" + JSON.stringify(stats) + "\n---\n\n"
-    );
+    const reportContent = JSON.stringify(reportObj);
+    if (!reportFile) {
+      console.log("FINAL STATISTICS:\n---\n" + reportContent + "\n---\n\n");
+    } else {
+      console.log(`Writing report to '${reportFile}'...`);
+      await afs.writeFile(reportFile, reportContent);
+      console.log(`Report saved`);
+    }
   };
 
   process.on("SIGINT", function () {
     console.log(`******* GOT SIGINT *****`);
     console.log(`* Downloads are still in progress...`);
     console.log(`* Dumping statistics and exiting:`);
-    printFinal();
-    process.exit(1);
+    printFinal().finally(() => process.exit(1));
   });
 
   if (duration) {
@@ -620,7 +637,7 @@ async function main() {
     console.log(`All fetches completed.`);
   }
 
-  printFinal();
+  await printFinal();
 }
 
 try {
