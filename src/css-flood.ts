@@ -479,22 +479,22 @@ async function main() {
         "Flawed method! " +
         "You can't accurately time async calls. " +
         "But the inaccuracies are probably neglectable.",
-      getchingUserTokenDuration: {
+      fetchUserToken: {
         min: authFetchCache.tokenFetchDuration.min,
         max: authFetchCache.tokenFetchDuration.max,
         avg: authFetchCache.tokenFetchDuration.avg(),
       },
-      authAccessTokenDuration: {
+      authAccessToken: {
         min: authFetchCache.authAccessTokenDuration.min,
         max: authFetchCache.authAccessTokenDuration.max,
         avg: authFetchCache.authAccessTokenDuration.avg(),
       },
-      buildingAuthFetcherDuration: {
+      buildingAuthFetcher: {
         min: authFetchCache.authFetchDuration.min,
         max: authFetchCache.authFetchDuration.max,
         avg: authFetchCache.authFetchDuration.avg(),
       },
-      generateDpopKeyPairDuration: {
+      generateDpopKeyPair: {
         min: authFetchCache.generateDpopKeyPairDurationCounter.min,
         max: authFetchCache.generateDpopKeyPairDurationCounter.max,
         avg: authFetchCache.generateDpopKeyPairDurationCounter.avg(),
