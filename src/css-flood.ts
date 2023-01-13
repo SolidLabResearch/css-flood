@@ -176,7 +176,8 @@ All steps (makes little sense):
     return res;
   })
   .help()
-  .wrap(120);
+  .wrap(120)
+  .strict(true);
 
 // ya = ya.wrap(ya.terminalWidth());
 const argv = ya.parseSync();
