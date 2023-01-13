@@ -151,10 +151,10 @@ Examples:
 --steps 'loadAC,validateAC,flood'
 --steps 'fillAC,saveAC'
 --steps 'loadAC,fillAC,saveAC'
---steps 'loadAC,testDownload,saveAC,flood'
+--steps 'loadAC,testRequests,saveAC,flood'
 
 All steps (makes little sense):
---steps 'loadAC,fillAC,validateAC,testDownload,saveAC,flood'
+--steps 'loadAC,fillAC,validateAC,testRequests,saveAC,flood'
 
 `
   )
@@ -164,7 +164,7 @@ All steps (makes little sense):
       "loadAC",
       "fillAC",
       "validateAC",
-      "testDownload",
+      "testRequests",
       "saveAC",
       "flood",
     ];
