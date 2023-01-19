@@ -44,7 +44,7 @@ Options:
   --reportFile         File to save report to (JSON format). Of not specified, the report is sent to stdout like the oth
                        er output.                                                                               [string]
   --duration           Total duration (in seconds) of the flood. After this time, no new fetches are done. If this optio
-                       n is used, --fetch-count is ignored.Default: run until all requested fetches are done.   [number]
+                       n is used, --fetchCount is ignored.Default: run until all requested fetches are done.   [number]
   --fetchCount         Number of fetches per user during the flood.                               [number] [default: 10]
   --parallel           Number of fetches in parallel during the flood.                            [number] [default: 10]
   --userCount          Number of users                                                            [number] [default: 10]

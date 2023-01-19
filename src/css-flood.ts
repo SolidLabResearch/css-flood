@@ -40,7 +40,7 @@ let ya = yargs(hideBin(process.argv))
     type: "number",
     description:
       "Total duration (in seconds) of the flood. After this time, no new fetches are done. " +
-      "If this option is used, --fetch-count is ignored." +
+      "If this option is used, --fetchCount is ignored." +
       "Default: run until all requested fetches are done.",
     demandOption: false,
   })
