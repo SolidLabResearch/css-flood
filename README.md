@@ -50,7 +50,7 @@ Options:
   --userCount          Number of users                                                            [number] [default: 10]
   --fetchTimeoutMs     How long before aborting a fetch because it takes too long? (in ms)      [number] [default: 4000]
   --filename           Remote file to download from pod, or filename of file to upload to pod
-                                                                                         [string] [default: "dummy.txt"]
+                                                                                            [string] [default: "10.rnd"]
   --filenameIndexing   Replace the literal string 'INDEX' in the filename for each action (upload/download). This way, e
                        ach fetch uses a unique filename. Index will start from 0 and increment.
                                                                                               [boolean] [default: false]

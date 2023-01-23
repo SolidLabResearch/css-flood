@@ -78,7 +78,7 @@ let ya = yargs(hideBin(process.argv))
     type: "string",
     description:
       "Remote file to download from pod, or filename of file to upload to pod",
-    default: "dummy.txt",
+    default: "10.rnd",
   })
   .option("filenameIndexing", {
     type: "boolean",
@@ -343,7 +343,7 @@ async function fetchPodFile(
       if (res.body) {
         await discardBodyData(res);
         const stoppedFetch = new Date().getTime(); //this method of timing is flawed for async!
-        //Because you can't accurately time async calls. (But the inaccuracies are probably neglectable.)
+        //Because you can't accurately time async calls. (But the inaccuracies are probably negligible.)
         counter.success++;
         counter.success_duration_ms.addDuration(stoppedFetch - startedFetch);
       } else {
@@ -478,7 +478,7 @@ async function main() {
       warning:
         "Flawed method! " +
         "You can't accurately time async calls. " +
-        "But the inaccuracies are probably neglectable.",
+        "But the inaccuracies are probably negligible.",
       fetchUserToken: {
         min: authFetchCache.tokenFetchDuration.min,
         max: authFetchCache.tokenFetchDuration.max,
@@ -524,6 +524,8 @@ async function main() {
   }
 
   let counter = new Counter();
+  let allFetchStart: number | null = null;
+  let allFetchEnd: number | null = null;
   const printFinal = async function () {
     const reportObj = {
       authFetchCache: {
@@ -537,12 +539,16 @@ async function main() {
         exceptions: counter.exceptions,
         statuses: counter.statuses,
         timeout: counter.timeout,
+        durationMs:
+          allFetchStart != null && allFetchEnd != null
+            ? allFetchEnd - allFetchStart
+            : -1,
       },
       durationStatistics: {
         warning:
           "Flawed method! " +
           "You can't accurately time async calls. " +
-          "But the inaccuracies are probably neglectable.",
+          "But the inaccuracies are probably negligible.",
         min: counter.success_duration_ms.min,
         max: counter.success_duration_ms.max,
         avg: counter.success_duration_ms.avg(),
@@ -567,7 +573,6 @@ async function main() {
 
   if (duration) {
     const durationMillis = duration * 1000;
-    const start = Date.now();
 
     //Execute as many fetches as needed to fill the requested time.
     let curUserId = 0;
@@ -586,10 +591,14 @@ async function main() {
         filenameIndexing
       );
     };
+    console.log(
+      `Fetching files from ${userCount} users. Max ${parallel} parallel requests. Will stop after ${duration} seconds...`
+    );
+    allFetchStart = Date.now();
     for (let p = 0; p < parallel; p++) {
       promises.push(
         Promise.race([
-          awaitUntilDeadline(requestMaker, start, durationMillis),
+          awaitUntilDeadline(requestMaker, allFetchStart, durationMillis),
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error("timeout")),
@@ -599,11 +608,9 @@ async function main() {
         ])
       );
     }
-    console.log(
-      `Fetching files from ${userCount} users. Max ${parallel} parallel requests. Will stop after ${duration} seconds...`
-    );
     await Promise.allSettled(promises);
-    const runMillis = Date.now() - start;
+    allFetchEnd = Date.now();
+    const runMillis = allFetchEnd - allFetchStart;
     console.log(`All fetches completed after ${runMillis / 1000.0} seconds.`);
     if (runMillis < durationMillis) {
       console.error(
@@ -632,10 +639,17 @@ async function main() {
       promises.push(awaitUntilEmpty(requests));
     }
     console.log(
-      `Fetching ${fetchCount} files from ${userCount} users. Max ${parallel} parallel requests...`
+      `Fetching ${fetchCount} files from ${userCount} users (= ${
+        fetchCount * userCount
+      } fetches). Max ${parallel} parallel requests...`
     );
+    allFetchStart = Date.now();
     await Promise.allSettled(promises);
-    console.log(`All fetches completed.`);
+    allFetchEnd = Date.now();
+    const runMillis = allFetchEnd - allFetchStart;
+    console.log(
+      `All ${fetchCount} fetches completed after ${runMillis / 1000.0} seconds.`
+    );
   }
 
   await printFinal();
