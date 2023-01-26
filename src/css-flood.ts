@@ -464,14 +464,24 @@ async function main() {
   }
 
   if (authenticate && steps.includes("validateAC")) {
+    const validateACStart = new Date().getTime();
     authFetchCache.validate(userCount, ensureAuthExpirationS);
+    const validateACStop = new Date().getTime();
+    console.log(
+      `validateAC took '${(validateACStop - validateACStart) / 1000.0} seconds'`
+    );
   }
   if (authenticate && steps.includes("testRequests")) {
+    const testReqsStart = new Date().getTime();
     await authFetchCache.test(
       userCount,
       cssBaseUrl,
       podFilename,
       fetchTimeoutMs
+    );
+    const testReqStop = new Date().getTime();
+    console.log(
+      `testRequests took '${(testReqStop - testReqsStart) / 1000.0} seconds'`
     );
   }
 
