@@ -117,6 +117,12 @@ let ya = yargs(hideBin(process.argv))
     type: "string",
     description: "File to load/save the authentication cache from/to",
   })
+  .option("ensureAuthExpiration", {
+    type: "number",
+    default: 90,
+    description:
+      "fillAC and validateAC will ensure the authentication cache content is still valid for at least this number of seconds",
+  })
   //advanced
   .option("fetchVersion", {
     type: "string",
@@ -419,6 +425,7 @@ async function main() {
   const useNodeFetch = argv.fetchVersion == "node" || false;
   const authCacheFile = argv.authCacheFile || null;
   const reportFile = argv.reportFile || null;
+  const ensureAuthExpirationS = argv.ensureAuthExpiration || 90;
 
   const steps: string[] = argv.steps;
 
@@ -446,7 +453,7 @@ async function main() {
 
   if (authenticate && steps.includes("fillAC")) {
     const preCacheStart = new Date().getTime();
-    await authFetchCache.preCache(userCount);
+    await authFetchCache.preCache(userCount, ensureAuthExpirationS);
     const preCacheStop = new Date().getTime();
     console.log(
       `PreCache took '${(preCacheStop - preCacheStart) / 1000.0} seconds'`
@@ -455,7 +462,7 @@ async function main() {
   }
 
   if (authenticate && steps.includes("validateAC")) {
-    authFetchCache.validate(userCount);
+    authFetchCache.validate(userCount, ensureAuthExpirationS);
   }
   if (authenticate && steps.includes("testRequests")) {
     await authFetchCache.test(

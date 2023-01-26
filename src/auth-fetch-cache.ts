@@ -109,10 +109,15 @@ export class AuthFetchCache {
     return theFetch;
   }
 
-  async preCache(userCount: number) {
+  async preCache(userCount: number, ensureAuthExpirationS: number) {
     if (this.authenticateCache === "none") {
       return;
     }
+
+    let countUTFetch = 0;
+    let countUTUseExisting = 0;
+    let countATFetch = 0;
+    let countATUseExisting = 0;
 
     console.log(
       `Caching ${userCount} user logins (cache method="${this.authenticateCache}")...`
@@ -144,13 +149,16 @@ export class AuthFetchCache {
         );
         this.cssTokensByUser[userIndex] = token;
         this.tokenFetchCount++;
+        countUTFetch++;
+      } else {
+        countUTUseExisting++;
       }
 
       if (this.authenticateCache === "all") {
         process.stdout.write(
           `   Pre-cache is authenticating user ${
             userIndex + 1
-          }/${userCount}... fetching access token...\r`
+          }/${userCount}... checking access token...\r`
         );
         const [fetch, accessToken] = await getUserAuthFetch(
           this.cssBaseUrl,
@@ -160,17 +168,26 @@ export class AuthFetchCache {
           this.authAccessTokenDuration,
           this.authFetchDuration,
           this.generateDpopKeyPairDurationCounter,
-          this.authAccessTokenByUser[userIndex]
+          this.authAccessTokenByUser[userIndex],
+          ensureAuthExpirationS
         );
+        if (this.authAccessTokenByUser[userIndex] != accessToken) {
+          countATFetch++;
+        } else {
+          countATUseExisting++;
+        }
         this.authAccessTokenByUser[userIndex] = accessToken;
         this.authFetchersByUser[userIndex] = fetch;
         this.authFetchCount++;
       }
     }
     process.stdout.write(`\n`);
+    console.log(
+      `Precache done. Counts: UserToken fetch ${countUTFetch} reuse ${countUTUseExisting} - AccessToken fetch ${countATFetch} reuse ${countATUseExisting}`
+    );
   }
 
-  validate(userCount: number) {
+  validate(userCount: number, ensureAuthExpirationS: number) {
     if (this.authenticateCache === "none") {
       return;
     }
@@ -203,15 +220,15 @@ export class AuthFetchCache {
       if (
         this.authenticateCache === "all" &&
         accessToken &&
-        !stillUsableAccessToken(accessToken)
+        !stillUsableAccessToken(accessToken, ensureAuthExpirationS)
       ) {
-        const secondExpired =
-          (now.getTime() - accessToken.expire.getTime()) / 1000.0;
+        const secondUntilExpiration =
+          (accessToken.expire.getTime() - now.getTime()) / 1000.0;
         console.warn(
           `   No usable access token for ${account}. \n` +
             `      expiration=${accessToken.expire} \n` +
             `      now=${now} \n` +
-            `      secondExpired=${secondExpired}`
+            `      secondUntilExpiration=${secondUntilExpiration}`
         );
         allValid = false;
       }
