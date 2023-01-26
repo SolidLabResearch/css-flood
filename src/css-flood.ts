@@ -453,7 +453,9 @@ async function main() {
 
   if (authenticate && steps.includes("fillAC")) {
     const preCacheStart = new Date().getTime();
-    await authFetchCache.preCache(userCount, ensureAuthExpirationS);
+    //make fillAC ensure AT tokens expire 30s later than requested.
+    //Otherwise, they might expire between start of fillAC and end of validateAC step!
+    await authFetchCache.preCache(userCount, ensureAuthExpirationS + 30);
     const preCacheStop = new Date().getTime();
     console.log(
       `PreCache took '${(preCacheStop - preCacheStart) / 1000.0} seconds'`
