@@ -258,6 +258,7 @@ export class AuthFetchCache {
           console.error(
             `         Authentication test failed for user ${userIndex}. HTTP status ${res.status}`
           );
+          console.error(`            Error message: ${await res.text()}`);
         } else {
           const body = await res.text();
           if (!body) {
