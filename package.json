@@ -1,6 +1,6 @@
 {
   "name": "css-flood",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Tool to flood the Community Solid Server with requests, for testing purposes.",
   "type": "module",
   "bin": {

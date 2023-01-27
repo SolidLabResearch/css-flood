@@ -118,6 +118,7 @@ export class AuthFetchCache {
     let countUTUseExisting = 0;
     let countATFetch = 0;
     let countATUseExisting = 0;
+    let earliestATexpiration: Date | null = null;
 
     console.log(
       `Caching ${userCount} user logins (cache method="${this.authenticateCache}")...`
@@ -176,15 +177,25 @@ export class AuthFetchCache {
         } else {
           countATUseExisting++;
         }
+        earliestATexpiration =
+          earliestATexpiration != null &&
+          accessToken.expire.getTime() > earliestATexpiration.getTime()
+            ? earliestATexpiration
+            : accessToken.expire;
         this.authAccessTokenByUser[userIndex] = accessToken;
         this.authFetchersByUser[userIndex] = fetch;
         this.authFetchCount++;
       }
     }
     process.stdout.write(`\n`);
+    console.log(`Precache done. Counts:`);
     console.log(
-      `Precache done. Counts: UserToken fetch ${countUTFetch} reuse ${countUTUseExisting} - AccessToken fetch ${countATFetch} reuse ${countATUseExisting}`
+      `     UserToken fetch ${countUTFetch} reuse ${countUTUseExisting}`
     );
+    console.log(
+      `     AccessToken fetch ${countATFetch} reuse ${countATUseExisting}`
+    );
+    console.log(`     First AccessToken expiration: ${earliestATexpiration}`);
   }
 
   validate(userCount: number, ensureAuthExpirationS: number) {
@@ -227,7 +238,7 @@ export class AuthFetchCache {
         console.warn(
           `   No usable access token for ${account}. \n` +
             `      expiration=${accessToken.expire} \n` +
-            `      now=${now} \n` +
+            `             now=${now} \n` +
             `      secondUntilExpiration=${secondUntilExpiration}`
         );
         allValid = false;
