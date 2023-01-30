@@ -162,6 +162,14 @@ export async function getUserAuthFetch(
         expire: expire,
         dpopKeyPair: dpopKeyPair,
       };
+
+      if (!stillUsableAccessToken(accessToken, ensureAuthExpirationS)) {
+        const msg =
+          `AccessToken was refreshed, but is not valid long enough.` +
+          `Must be valid for ${ensureAuthExpirationS}s, but is valid for ${expiresIn}s`;
+        console.error(msg);
+        throw new Error(msg);
+      }
     }
   } catch (error: any) {
     if (error.name === "AbortError") {

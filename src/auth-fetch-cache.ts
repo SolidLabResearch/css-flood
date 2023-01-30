@@ -119,6 +119,10 @@ export class AuthFetchCache {
     let countATFetch = 0;
     let countATUseExisting = 0;
     let earliestATexpiration: Date | null = null;
+    let earliestATUserIndex: number | null = null;
+    let earliestATWasReused: boolean | null = null;
+    let earliestATPreviousAT: AccessToken | null = null;
+    let earliestATCurAT: AccessToken | null = null;
 
     console.log(
       `Caching ${userCount} user logins (cache method="${this.authenticateCache}")...`
@@ -156,10 +160,18 @@ export class AuthFetchCache {
       }
 
       if (this.authenticateCache === "all") {
+        const now = new Date();
+        const curAccessToken = this.authAccessTokenByUser[userIndex];
+        const aTExpiresInS = curAccessToken
+          ? curAccessToken.expire.getTime() - now.getTime()
+          : null;
+        const atInfo = aTExpiresInS
+          ? `(expires in ${aTExpiresInS}s)`
+          : `(none)`;
         process.stdout.write(
           `   Pre-cache is authenticating user ${
             userIndex + 1
-          }/${userCount}... checking access token...\r`
+          }/${userCount}... checking access token ${atInfo}...\r`
         );
         const [fetch, accessToken] = await getUserAuthFetch(
           this.cssBaseUrl,
@@ -172,16 +184,22 @@ export class AuthFetchCache {
           this.authAccessTokenByUser[userIndex],
           ensureAuthExpirationS
         );
-        if (this.authAccessTokenByUser[userIndex] != accessToken) {
+        const wasReused = this.authAccessTokenByUser[userIndex] == accessToken;
+        if (!wasReused) {
           countATFetch++;
         } else {
           countATUseExisting++;
         }
-        earliestATexpiration =
-          earliestATexpiration != null &&
-          accessToken.expire.getTime() > earliestATexpiration.getTime()
-            ? earliestATexpiration
-            : accessToken.expire;
+        if (
+          earliestATexpiration == null ||
+          accessToken.expire.getTime() < earliestATexpiration.getTime()
+        ) {
+          earliestATexpiration = accessToken.expire;
+          earliestATUserIndex = userIndex;
+          earliestATWasReused = wasReused;
+          earliestATCurAT = accessToken;
+          earliestATPreviousAT = this.authAccessTokenByUser[userIndex];
+        }
         this.authAccessTokenByUser[userIndex] = accessToken;
         this.authFetchersByUser[userIndex] = fetch;
         this.authFetchCount++;
@@ -195,7 +213,10 @@ export class AuthFetchCache {
     console.log(
       `     AccessToken fetch ${countATFetch} reuse ${countATUseExisting}`
     );
-    console.log(`     First AccessToken expiration: ${earliestATexpiration}`);
+    console.log(
+      `     First AccessToken expiration: ${earliestATexpiration}` +
+        ` (user ${earliestATUserIndex} reused=${earliestATWasReused} prevExpire=${earliestATPreviousAT?.expire})`
+    );
   }
 
   validate(userCount: number, ensureAuthExpirationS: number) {
