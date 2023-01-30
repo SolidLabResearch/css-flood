@@ -15,6 +15,7 @@ import { DurationCounter } from "./duration-counter.js";
 import * as fs from "fs";
 import { promises as afs } from "fs";
 import { AccessToken } from "./solid-auth";
+import { getRandomValues } from "node:crypto";
 
 let ya = yargs(hideBin(process.argv))
   .usage("Usage: $0 --url <url> [--steps <steps>] ...")
@@ -219,7 +220,7 @@ function generateUploadData(
   const res = new Uint8Array(uploadSizeByte);
   const startTime = new Date().getTime();
 
-  window.crypto.getRandomValues(res);
+  getRandomValues(res);
   // for (let i = 0; i < uploadSizeByte; i++) {
   //   res[i] = 0;
   // }
