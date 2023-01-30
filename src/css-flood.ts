@@ -149,6 +149,8 @@ The steps that can run are (always in this order):
 - fillAC: Perform authentication of all users, which fills the authentication cache.
 - validateAC: Check if all entries in the authentication cache are up to date. 
               This step causes exit with code 1 if there is at least one cache entry that has expired.
+- testRequest: Do 1 request (typically a GET to download a file) for the first user. 
+               This tests both the data in the authentication cache (adding missing entries), and the actual request.
 - testRequests: Do 1 request (typically a GET to download a file) for each users (back-to-back, not in parallel). 
                 This tests both the data in the authentication cache (adding missing entries), and the actual request.
 - saveAC: Save the authentication cache to file.
@@ -158,10 +160,10 @@ Examples:
 --steps 'loadAC,validateAC,flood'
 --steps 'fillAC,saveAC'
 --steps 'loadAC,fillAC,saveAC'
---steps 'loadAC,testRequests,saveAC,flood'
+--steps 'loadAC,testRequest,saveAC,flood'
 
 All steps (makes little sense):
---steps 'loadAC,fillAC,validateAC,testRequests,saveAC,flood'
+--steps 'loadAC,fillAC,validateAC,testRequest,testRequests,saveAC,flood'
 
 `
   )
@@ -171,6 +173,7 @@ All steps (makes little sense):
       "loadAC",
       "fillAC",
       "validateAC",
+      "testRequest",
       "testRequests",
       "saveAC",
       "flood",
@@ -499,6 +502,14 @@ async function main() {
       `validateAC took '${(validateACStop - validateACStart) / 1000.0} seconds'`
     );
   }
+  if (authenticate && steps.includes("testRequest")) {
+    const testReqStart = new Date().getTime();
+    await authFetchCache.test(1, cssBaseUrl, podFilename, fetchTimeoutMs);
+    const testReqStop = new Date().getTime();
+    console.log(
+      `testRequest took '${(testReqStop - testReqStart) / 1000.0} seconds'`
+    );
+  }
   if (authenticate && steps.includes("testRequests")) {
     const testReqsStart = new Date().getTime();
     await authFetchCache.test(
@@ -507,9 +518,9 @@ async function main() {
       podFilename,
       fetchTimeoutMs
     );
-    const testReqStop = new Date().getTime();
+    const testReqsStop = new Date().getTime();
     console.log(
-      `testRequests took '${(testReqStop - testReqsStart) / 1000.0} seconds'`
+      `testRequests took '${(testReqsStop - testReqsStart) / 1000.0} seconds'`
     );
   }
 
