@@ -35,6 +35,7 @@ export class AuthFetchCache {
   cssTokensByUser: Array<UserToken | null> = [];
   authAccessTokenByUser: Array<AccessToken | null> = [];
   authFetchersByUser: Array<AnyFetchType | null> = [];
+  loadedAuthCacheMeta: Object = {};
 
   useCount: number = 0;
   tokenFetchCount: number = 0;
@@ -408,6 +409,8 @@ export class AuthFetchCache {
       )
     );
     const c = {
+      timestamp: new Date().toISOString(),
+      filename: authCacheFile,
       cssTokensByUser: this.cssTokensByUser,
       authAccessTokenByUser: accessTokenForJson,
     };
@@ -420,6 +423,10 @@ export class AuthFetchCache {
     const c = JSON.parse(cacheContent);
     this.cssTokensByUser = c.cssTokensByUser;
     this.authAccessTokenByUser = c.authAccessTokenByUser;
+    this.loadedAuthCacheMeta = {
+      timestamp: c.timestamp,
+      filename: c.filename,
+    };
     for (const accessToken of this.authAccessTokenByUser.values()) {
       if (accessToken) {
         //because we got if from JSON, accessToken.dpopKeyPair.privateKey will be PKCS8, not a KeyLike!

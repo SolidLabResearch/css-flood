@@ -470,6 +470,13 @@ async function main() {
         earliestATexpiration
       )}` + ` (user ${earliestATUserIndex})`
     );
+    console.log(
+      `     Loaded AuthCache metadata: ${JSON.stringify(
+        authFetchCache.loadedAuthCacheMeta,
+        null,
+        3
+      )}`
+    );
   }
 
   if (authenticate && steps.includes("fillAC")) {
