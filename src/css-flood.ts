@@ -219,7 +219,7 @@ function generateUploadData(
   const res = new Uint8Array(uploadSizeByte);
   const startTime = new Date().getTime();
 
-  crypto.getRandomValues(res);
+  window.crypto.getRandomValues(res);
   // for (let i = 0; i < uploadSizeByte; i++) {
   //   res[i] = 0;
   // }
