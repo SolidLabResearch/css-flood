@@ -4,7 +4,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import nodeFetch from "node-fetch";
 import { Response as NodeJsResponse } from "node-fetch";
-import { AuthFetchCache } from "./auth-fetch-cache.js";
+import { AuthFetchCache, fromNow } from "./auth-fetch-cache.js";
 import { once } from "events";
 import {
   AnyFetchResponseType,
@@ -14,6 +14,7 @@ import {
 import { DurationCounter } from "./duration-counter.js";
 import * as fs from "fs";
 import { promises as afs } from "fs";
+import { AccessToken } from "./solid-auth";
 
 let ya = yargs(hideBin(process.argv))
   .usage("Usage: $0 --url <url> [--steps <steps>] ...")
@@ -449,6 +450,26 @@ async function main() {
     console.log(`Loading auth cache from '${authCacheFile}'`);
     await authFetchCache.load(authCacheFile);
     console.log(`Auth cache now has '${authFetchCache.toCountString()}'`);
+
+    //print info about loaded Access Tokens
+    let earliestATexpiration: Date | null = null;
+    let earliestATUserIndex: number | null = null;
+    for (let userIndex = 0; userIndex < userCount; userIndex++) {
+      const accessToken = authFetchCache.authAccessTokenByUser[userIndex];
+      if (
+        accessToken != null &&
+        (earliestATexpiration == null ||
+          accessToken.expire.getTime() < earliestATexpiration.getTime())
+      ) {
+        earliestATexpiration = accessToken.expire;
+        earliestATUserIndex = userIndex;
+      }
+    }
+    console.log(
+      `     First AccessToken expiration: ${earliestATexpiration?.toISOString()}=${fromNow(
+        earliestATexpiration
+      )}` + ` (user ${earliestATUserIndex})`
+    );
   }
 
   if (authenticate && steps.includes("fillAC")) {

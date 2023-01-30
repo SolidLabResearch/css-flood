@@ -14,6 +14,19 @@ import { DurationCounter } from "./duration-counter.js";
 import { promises as fs } from "fs";
 import * as jose from "jose";
 
+export function fromNow(d?: Date | null): null | string {
+  if (!d) {
+    return null;
+  }
+  const now = new Date();
+  const s = d.getTime() - now.getTime();
+  if (s > 0) {
+    return `in ${s}s`;
+  } else {
+    return `${s}s ago`;
+  }
+}
+
 export class AuthFetchCache {
   cssBaseUrl: string;
   authenticateCache: "none" | "token" | "all" = "none";
@@ -162,11 +175,8 @@ export class AuthFetchCache {
       if (this.authenticateCache === "all") {
         const now = new Date();
         const curAccessToken = this.authAccessTokenByUser[userIndex];
-        const aTExpiresInS = curAccessToken
-          ? curAccessToken.expire.getTime() - now.getTime()
-          : null;
-        const atInfo = aTExpiresInS
-          ? `(expires in ${aTExpiresInS}s)`
+        const atInfo = curAccessToken?.expire
+          ? `(expires ${fromNow(curAccessToken?.expire)})`
           : `(none)`;
         process.stdout.write(
           `   Pre-cache is authenticating user ${
@@ -214,8 +224,13 @@ export class AuthFetchCache {
       `     AccessToken fetch ${countATFetch} reuse ${countATUseExisting}`
     );
     console.log(
-      `     First AccessToken expiration: ${earliestATexpiration}` +
-        ` (user ${earliestATUserIndex} reused=${earliestATWasReused} prevExpire=${earliestATPreviousAT?.expire})`
+      `     First AccessToken expiration: ${earliestATexpiration?.toISOString()}=${fromNow(
+        earliestATexpiration
+      )}` +
+        ` (user ${earliestATUserIndex} reused=${earliestATWasReused} ` +
+        `prevExpire=${earliestATPreviousAT?.expire.toISOString()}=${fromNow(
+          earliestATPreviousAT?.expire
+        )})`
     );
   }
 
