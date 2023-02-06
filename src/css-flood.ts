@@ -282,6 +282,9 @@ async function discardBodyData(response: NodeJsResponse | Response) {
 
     // @ts-ignore
     const body: NodeJS.ReadableStream = response.body;
+    if (!body.readable) {
+      return;
+    }
 
     body.on("readable", () => {
       let chunk;
@@ -289,6 +292,8 @@ async function discardBodyData(response: NodeJsResponse | Response) {
         //discard data
       }
     });
+
+    //TODO race condition possible?!
 
     await once(body, "end");
     return;
@@ -306,6 +311,11 @@ async function fetchPodFile(
   httpVerb: HttpVerb,
   filenameIndexing: boolean
 ) {
+  if (mustUpload) {
+    console.info(
+      `DEBUG UPLOAD: fetchPodFile start at ${new Date().toISOString()}`
+    );
+  }
   try {
     const account = `user${userIndex}`;
     const aFetch = await authFetchCache.getAuthFetcher(userIndex);
@@ -336,13 +346,11 @@ async function fetchPodFile(
       `${cssBaseUrl}${account}/${podFileRelative}`,
       options
     );
-    // console.log(`res.ok`, res.ok);
-    // console.log(`res.status`, res.status);
     counter.statuses[res.status] = (counter.statuses[res.status] || 0) + 1;
 
     if (!res.ok) {
       const bodyError = await res.text();
-      const errorMessage = `${res.status} - Fetching from account ${account}, pod path "${podFileRelative}" failed: ${bodyError}`;
+      const errorMessage = `${res.status} - ${httpVerb} with account ${account}, pod path "${podFileRelative}" failed: ${bodyError}`;
       if (counter.failure - counter.exceptions < 10) {
         //only log first 10 status failures
         console.error(errorMessage);
