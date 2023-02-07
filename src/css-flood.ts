@@ -311,11 +311,6 @@ async function fetchPodFile(
   httpVerb: HttpVerb,
   filenameIndexing: boolean
 ) {
-  if (mustUpload) {
-    console.info(
-      `DEBUG UPLOAD: fetchPodFile start at ${new Date().toISOString()}`
-    );
-  }
   try {
     const account = `user${userIndex}`;
     const aFetch = await authFetchCache.getAuthFetcher(userIndex);
