@@ -332,15 +332,15 @@ async function fetchPodFile(
       podFileRelative = podFileRelative.replace("INDEX", `${fetchIndex}`);
     }
 
-    const res: AnyFetchResponseType = await aFetch(
-      `${cssBaseUrl}${account}/${podFileRelative}`,
-      options
-    );
+    const url = `${cssBaseUrl}${account}/${podFileRelative}`;
+    const res: AnyFetchResponseType = await aFetch(url, options);
     counter.statuses[res.status] = (counter.statuses[res.status] || 0) + 1;
 
     if (!res.ok) {
       const bodyError = await res.text();
-      const errorMessage = `${res.status} - ${httpVerb} with account ${account}, pod path "${podFileRelative}" failed: ${bodyError}`;
+      const errorMessage =
+        `${res.status} - ${httpVerb} with account ${account}, pod path "${podFileRelative}" failed` +
+        `(URL=${url}): ${bodyError}`;
       if (counter.failure - counter.exceptions < 10) {
         //only log first 10 status failures
         console.error(errorMessage);
