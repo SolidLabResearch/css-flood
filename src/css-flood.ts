@@ -207,12 +207,6 @@ const httpVerb: HttpVerb = <HttpVerb>argv.verb;
 const mustUpload = httpVerb == "POST" || httpVerb == "PUT";
 const uploadSizeByte: number = argv.uploadSizeByte;
 
-let curIndex = 0;
-function getUniqueIndex(): number {
-  //no need at this point to use any fancy atomic operations. This is single threaded, so it is safe.
-  return curIndex++;
-}
-
 function generateUploadData(
   httpVerb: HttpVerb,
   uploadSizeByte: number
@@ -309,7 +303,8 @@ async function fetchPodFile(
   authFetchCache: AuthFetchCache,
   fetchTimeoutMs: number,
   httpVerb: HttpVerb,
-  filenameIndexing: boolean
+  filenameIndexing: boolean,
+  fetchIndex: number
 ) {
   try {
     const account = `user${userIndex}`;
@@ -334,7 +329,7 @@ async function fetchPodFile(
     }
 
     if (filenameIndexing) {
-      podFileRelative = podFileRelative.replace("INDEX", `${getUniqueIndex()}`);
+      podFileRelative = podFileRelative.replace("INDEX", `${fetchIndex}`);
     }
 
     const res: AnyFetchResponseType = await aFetch(
@@ -638,6 +633,8 @@ async function main() {
 
     //Execute as many fetches as needed to fill the requested time.
     let curUserId = 0;
+    const fetchIndexForUser: number[] = Array(userCount).fill(0);
+
     const requestMaker = () => {
       const userId = curUserId++;
       if (curUserId >= userCount) {
@@ -650,7 +647,8 @@ async function main() {
         authFetchCache,
         fetchTimeoutMs,
         httpVerb,
-        filenameIndexing
+        filenameIndexing,
+        fetchIndexForUser[userId]++
       );
     };
     console.log(
@@ -692,7 +690,8 @@ async function main() {
             authFetchCache,
             fetchTimeoutMs,
             httpVerb,
-            filenameIndexing
+            filenameIndexing,
+            i
           )
         );
       }
