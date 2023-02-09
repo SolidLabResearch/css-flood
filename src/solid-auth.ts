@@ -80,7 +80,7 @@ export function stillUsableAccessToken(
   }
   const now = new Date().getTime();
   const expire = accessToken.expire.getTime();
-  return expire > now && expire - now > deadline_s;
+  return expire > now && expire - now > deadline_s * 1000;
 }
 
 export async function getUserAuthFetch(

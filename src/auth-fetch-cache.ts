@@ -135,6 +135,7 @@ export class AuthFetchCache {
     let earliestATexpiration: Date | null = null;
     let earliestATUserIndex: number | null = null;
     let earliestATWasReused: boolean | null = null;
+    let earliestATStillUsable: boolean | null = null;
     let earliestATPreviousAT: AccessToken | null = null;
     let earliestATCurAT: AccessToken | null = null;
 
@@ -208,6 +209,10 @@ export class AuthFetchCache {
           earliestATexpiration = accessToken.expire;
           earliestATUserIndex = userIndex;
           earliestATWasReused = wasReused;
+          earliestATStillUsable = stillUsableAccessToken(
+            accessToken,
+            ensureAuthExpirationS
+          );
           earliestATCurAT = accessToken;
           earliestATPreviousAT = this.authAccessTokenByUser[userIndex];
         }
@@ -228,11 +233,14 @@ export class AuthFetchCache {
       `     First AccessToken expiration: ${earliestATexpiration?.toISOString()}=${fromNow(
         earliestATexpiration
       )}` +
-        ` (user ${earliestATUserIndex} reused=${earliestATWasReused} ` +
+        ` (user ${earliestATUserIndex} reused=${earliestATWasReused} stillUsable=${earliestATStillUsable} ` +
+        `ensureAuthExpirationS=${ensureAuthExpirationS} ` +
         `prevExpire=${earliestATPreviousAT?.expire.toISOString()}=${fromNow(
           earliestATPreviousAT?.expire
         )})`
     );
+
+    console.assert(earliestATStillUsable);
   }
 
   validate(userCount: number, ensureAuthExpirationS: number) {
