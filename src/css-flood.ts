@@ -14,706 +14,196 @@ import {
 import { DurationCounter } from "./duration-counter.js";
 import * as fs from "fs";
 import { promises as afs } from "fs";
-import { AccessToken } from "./solid-auth";
+import { AccessToken } from "./solid-auth.js";
 import { webcrypto } from "node:crypto";
-
-let ya = yargs(hideBin(process.argv))
-  .usage("Usage: $0 --url <url> [--steps <steps>] ...")
-  //general options
-  .option("url", {
-    // alias: "u",
-    type: "string",
-    description: "Base URL of the CSS",
-    demandOption: true,
-  })
-  .option("steps", {
-    type: "string",
-    description: `The steps that need to run, as a comma separated list. See below for more details.`,
-    default: "flood",
-  })
-  .option("reportFile", {
-    type: "string",
-    description:
-      "File to save report to (JSON format). Of not specified, the report is sent to stdout like the other output.",
-  })
-  //flood config
-  .option("duration", {
-    // alias: "fc",
-    type: "number",
-    description:
-      "Total duration (in seconds) of the flood. After this time, no new fetches are done. " +
-      "If this option is used, --fetchCount is ignored." +
-      "Default: run until all requested fetches are done.",
-    demandOption: false,
-  })
-  .option("fetchCount", {
-    // alias: "fc",
-    type: "number",
-    description: "Number of fetches per user during the flood.",
-    demandOption: false,
-    default: 10,
-  })
-  .option("parallel", {
-    // alias: "pc",
-    type: "number",
-    description: "Number of fetches in parallel during the flood.",
-    demandOption: false,
-    default: 10,
-  })
-  .option("userCount", {
-    // alias: "uc",
-    type: "number",
-    description: "Number of users",
-    demandOption: false,
-    default: 10,
-  })
-  .option("fetchTimeoutMs", {
-    // alias: "t",
-    type: "number",
-    description:
-      "How long before aborting a fetch because it takes too long? (in ms)",
-    demandOption: false,
-    default: 4_000,
-  })
-  .option("filename", {
-    // alias: "f",
-    type: "string",
-    description:
-      "Remote file to download from pod, or filename of file to upload to pod",
-    default: "10.rnd",
-  })
-  .option("filenameIndexing", {
-    type: "boolean",
-    description:
-      "Replace the literal string 'INDEX' in the filename for each action (upload/download). " +
-      "This way, each fetch uses a unique filename. Index will start from 0 and increment.",
-    default: false,
-  })
-  .option("uploadSizeByte", {
-    type: "number",
-    description: "Number of bytes of (random) data to upload for POST/PUT",
-    default: 10,
-  })
-  .option("verb", {
-    // alias: "v",
-    type: "string",
-    choices: ["GET", "PUT", "POST", "DELETE"],
-    description: "HTTP verb to use for the flood: GET/PUT/POST/DELETE",
-    default: "GET",
-  })
-  //authentication
-  .option("authenticate", {
-    // alias: "a",
-    type: "boolean",
-    description: "Authenticated as the user owning the target file",
-    default: false,
-  })
-  .option("authenticateCache", {
-    type: "string",
-    choices: ["none", "token", "all"],
-    description:
-      "How much authentication should be cached? All authentication (=all)? Only the CSS user token (=token)? Or no caching (=none)?",
-    default: "all",
-  })
-  .option("authCacheFile", {
-    type: "string",
-    description: "File to load/save the authentication cache from/to",
-  })
-  .option("ensureAuthExpiration", {
-    type: "number",
-    default: 90,
-    description:
-      "fillAC and validateAC will ensure the authentication cache content is still valid for at least this number of seconds",
-  })
-  //advanced
-  .option("fetchVersion", {
-    type: "string",
-    choices: ["node", "es6"],
-    description:
-      "Use node-fetch or ES6 fetch (ES6 fetch is only available for nodejs versions >= 18)",
-    default: "node",
-  })
-  .epilogue(
-    `Details for --steps:
-    
-css-flood performs one or more steps in a fixed order. 
---steps selects which steps run (and which don't).
-
-A lot of these steps are related to the "Authentication Cache".
-Note that this cache is not used if authentication is disabled.
-How much the authentication cache caches, can also be configured with the --authenticateCache option.
-The file used to load/save the authentication cache is controlled by the --authCacheFile option.
-
-The steps that can run are (always in this order):
-
-- loadAC: Load the authentication cache from file.
-- fillAC: Perform authentication of all users, which fills the authentication cache.
-- validateAC: Check if all entries in the authentication cache are up to date. 
-              This step causes exit with code 1 if there is at least one cache entry that has expired.
-- testRequest: Do 1 request (typically a GET to download a file) for the first user. 
-               This tests both the data in the authentication cache (adding missing entries), and the actual request.
-- testRequests: Do 1 request (typically a GET to download a file) for each users (back-to-back, not in parallel). 
-                This tests both the data in the authentication cache (adding missing entries), and the actual request.
-- saveAC: Save the authentication cache to file.
-- flood: Run the actual "flood": generate load on the target CSS by running a number of requests in parallel.
-
-Examples:
---steps 'loadAC,validateAC,flood'
---steps 'fillAC,saveAC'
---steps 'loadAC,fillAC,saveAC'
---steps 'loadAC,testRequest,saveAC,flood'
-
-All steps (makes little sense):
---steps 'loadAC,fillAC,validateAC,testRequest,testRequests,saveAC,flood'
-
-`
-  )
-  .coerce("steps", (arg) => {
-    const res = arg.split(",");
-    const allowedSteps = [
-      "loadAC",
-      "fillAC",
-      "validateAC",
-      "testRequest",
-      "testRequests",
-      "saveAC",
-      "flood",
-    ];
-    for (const step of res) {
-      if (!allowedSteps.includes(step)) {
-        throw new Error(`${step} is not an known step`);
-      }
-    }
-    return res;
-  })
-  .help()
-  .wrap(120)
-  .strict(true);
-
-// ya = ya.wrap(ya.terminalWidth());
-const argv = ya.parseSync();
-
-enum HttpVerb {
-  GET = "GET",
-  PUT = "PUT",
-  POST = "POST",
-  DELETE = "DELETE",
-}
-
-const cssBaseUrl: string = argv.url.endsWith("/") ? argv.url : argv.url + "/";
-const podFilename: string = argv.filename;
-const filenameIndexing: boolean = argv.filenameIndexing;
-const httpVerb: HttpVerb = <HttpVerb>argv.verb;
-const mustUpload = httpVerb == "POST" || httpVerb == "PUT";
-const uploadSizeByte: number = argv.uploadSizeByte;
-
-function generateUploadData(
-  httpVerb: HttpVerb,
-  uploadSizeByte: number
-): ArrayBuffer {
-  const res = new Uint8Array(uploadSizeByte);
-  const startTime = new Date().getTime();
-
-  webcrypto.getRandomValues(res);
-  // for (let i = 0; i < uploadSizeByte; i++) {
-  //   res[i] = 0;
-  // }
-
-  const durationMs = new Date().getTime() - startTime;
-  console.debug(
-    `Generating random data for upload took ${durationMs}ms (for ${uploadSizeByte} bytes)`
-  );
-  return res;
-}
-
-const uploadData = mustUpload
-  ? generateUploadData(httpVerb, uploadSizeByte)
-  : null;
-
-interface StatusNumberInfo {
-  [status: number]: number;
-}
-
-class Counter {
-  total: number = 0;
-  success: number = 0;
-  failure: number = 0;
-  exceptions: number = 0;
-  timeout: number = 0;
-  statuses: StatusNumberInfo = {};
-
-  success_duration_ms = new DurationCounter();
-}
-
-async function discardBodyData(response: NodeJsResponse | Response) {
-  //handles both node-fetch repsonse body (NodeJS.ReadableStream) and ES6 fetch response body (ReadableStream)
-
-  if (!response.body) {
-    console.warn("No response body");
-    return;
-  }
-
-  if (response.body.hasOwnProperty("getReader")) {
-    //ES6 fetch
-
-    // @ts-ignore
-    const body: ReadableStream = response.body;
-
-    const bodyReader = body.getReader();
-    if (bodyReader) {
-      let done = false;
-      while (!done) {
-        //discard data (value)
-        const { done: d, value: _ } = await bodyReader.read();
-        done = d;
-      }
-    }
-
-    return;
-  }
-  if (response.body.hasOwnProperty("_eventsCount")) {
-    //node-fetch
-
-    // @ts-ignore
-    const body: NodeJS.ReadableStream = response.body;
-    if (!body.readable) {
-      return;
-    }
-
-    body.on("readable", () => {
-      let chunk;
-      while (null !== (chunk = body.read())) {
-        //discard data
-      }
-    });
-
-    //TODO race condition possible?!
-
-    await once(body, "end");
-    return;
-  }
-  const _ = await response.text();
-  console.warn("Unknown fetch response body");
-}
-
-async function fetchPodFile(
-  userIndex: number,
-  podFileRelative: string,
-  counter: Counter,
-  authFetchCache: AuthFetchCache,
-  fetchTimeoutMs: number,
-  httpVerb: HttpVerb,
-  filenameIndexing: boolean,
-  fetchIndex: number
-) {
-  try {
-    const account = `user${userIndex}`;
-    const aFetch = await authFetchCache.getAuthFetcher(userIndex);
-    // console.log(`   Will fetch file from account ${account}, pod path "${podFileRelative}"`);
-    counter.total++;
-    const startedFetch = new Date().getTime();
-
-    const options: any = {
-      method: httpVerb,
-      //open bug in nodejs typescript that AbortSignal.timeout doesn't work
-      //  see https://github.com/node-fetch/node-fetch/issues/741
-      // @ts-ignore
-      signal: AbortSignal.timeout(fetchTimeoutMs), // abort after 4 seconds //supported in nodejs>=17.3
-    };
-
-    if (mustUpload) {
-      options.headers = {
-        "Content-type": "application/octet-stream",
-      };
-      options.body = uploadData;
-    }
-
-    if (filenameIndexing) {
-      podFileRelative = podFileRelative.replace("INDEX", `${fetchIndex}`);
-    }
-
-    const url = `${cssBaseUrl}${account}/${podFileRelative}`;
-    const res: AnyFetchResponseType = await aFetch(url, options);
-    counter.statuses[res.status] = (counter.statuses[res.status] || 0) + 1;
-
-    if (!res.ok) {
-      const bodyError = await res.text();
-      const errorMessage =
-        `${res.status} - ${httpVerb} with account ${account}, pod path "${podFileRelative}" failed` +
-        `(URL=${url}): ${bodyError}`;
-      if (counter.failure - counter.exceptions < 10) {
-        //only log first 10 status failures
-        console.error(errorMessage);
-      }
-      //throw new Error(errorMessage);
-      counter.failure++;
-      return;
-    } else {
-      if (res.body) {
-        await discardBodyData(res);
-        const stoppedFetch = new Date().getTime(); //this method of timing is flawed for async!
-        //Because you can't accurately time async calls. (But the inaccuracies are probably negligible.)
-        counter.success++;
-        counter.success_duration_ms.addDuration(stoppedFetch - startedFetch);
-      } else {
-        if (httpVerb == "GET") {
-          console.warn("successful fetch GET, but no body!");
-          counter.failure++;
-        } else {
-          const stoppedFetch = new Date().getTime();
-          counter.success++;
-          counter.success_duration_ms.addDuration(stoppedFetch - startedFetch);
-        }
-      }
-    }
-  } catch (e: any) {
-    counter.failure++;
-
-    if (e.name === "AbortError") {
-      counter.timeout++;
-      console.error(`Fetch took longer than ${fetchTimeoutMs} ms: aborted`);
-      return;
-    }
-
-    counter.exceptions++;
-    if (counter.exceptions < 10) {
-      //only log first 10 exceptions
-      console.error(e);
-    }
-  }
-  // console.log(`res.text`, body);
-}
-
-async function awaitUntilEmpty(actionPromiseFactory: (() => Promise<void>)[]) {
-  while (true) {
-    const actionMaker = actionPromiseFactory.pop();
-    if (!actionMaker) {
-      break;
-    }
-    const action = actionMaker();
-    await action;
-  }
-}
-
-async function awaitUntilDeadline(
-  actionMaker: () => Promise<void>,
-  start: number,
-  durationMillis: number
-) {
-  try {
-    while (Date.now() - start < durationMillis) {
-      const action = actionMaker();
-      await action;
-    }
-    // @ts-ignore
-  } catch (err: any) {
-    console.error(
-      `Failed to fetch in awaitUntilDeadline loop (= implementation error): \n${err.name}: ${err.message}`
-    );
-    console.error(err);
-    process.exit(2);
-  }
-}
+import { getCliArgs, HttpVerb } from "./css-flood-args.js";
+import {
+  awaitUntilDeadline,
+  awaitUntilEmpty,
+  Counter,
+  fetchPodFile,
+  FloodStatistics,
+  generateUploadData,
+  reportAuthCacheStatistics,
+  reportFinalStatistics,
+  runNamedStep,
+  stepFlood,
+  stepLoadAuthCache,
+  sumStatistics,
+} from "./css-flood-steps.js";
+import { fork } from "child_process";
+import { ControllerMsg, WorkerMsg } from "./css-flood-messages.js";
+import { MessageCheat } from "./message-cheat.js";
 
 async function main() {
-  const userCount = argv.userCount || 1;
-  const fetchTimeoutMs = argv.fetchTimeoutMs || 4_000;
-  const fetchCount = argv.fetchCount || 1;
-  const parallel = argv.parallel || 10;
-  const duration = argv.duration;
-  // @ts-ignore
-  const authenticateCache: "none" | "token" | "all" =
-    argv.authenticateCache || "all";
-  const authenticate = argv.authenticate || false;
-  const useNodeFetch = argv.fetchVersion == "node" || false;
-  const authCacheFile = argv.authCacheFile || null;
-  const reportFile = argv.reportFile || null;
-  const ensureAuthExpirationS = argv.ensureAuthExpiration || 90;
-
-  const steps: string[] = argv.steps;
-
-  const requests = [];
-  const promises = [];
-
-  const fetcher: AnyFetchType = useNodeFetch ? nodeFetch : es6fetch;
+  const cli = getCliArgs();
+  const fetcher: AnyFetchType = cli.useNodeFetch ? nodeFetch : es6fetch;
 
   const authFetchCache = new AuthFetchCache(
-    cssBaseUrl,
-    authenticate,
-    authenticateCache,
+    cli.cssBaseUrl,
+    cli.authenticate,
+    cli.authenticateCache,
     fetcher
   );
 
-  if (
-    steps.includes("loadAC") &&
-    authCacheFile &&
-    fs.existsSync(authCacheFile)
-  ) {
-    console.log(`Loading auth cache from '${authCacheFile}'`);
-    await authFetchCache.load(authCacheFile);
-    console.log(`Auth cache now has '${authFetchCache.toCountString()}'`);
-
-    //print info about loaded Access Tokens
-    let earliestATexpiration: Date | null = null;
-    let earliestATUserIndex: number | null = null;
-    for (let userIndex = 0; userIndex < userCount; userIndex++) {
-      const accessToken = authFetchCache.authAccessTokenByUser[userIndex];
-      if (
-        accessToken != null &&
-        (earliestATexpiration == null ||
-          accessToken.expire.getTime() < earliestATexpiration.getTime())
-      ) {
-        earliestATexpiration = accessToken.expire;
-        earliestATUserIndex = userIndex;
-      }
-    }
-    console.log(
-      `     First AccessToken expiration: ${earliestATexpiration?.toISOString()}=${fromNow(
-        earliestATexpiration
-      )}` + ` (user ${earliestATUserIndex})`
-    );
-    console.log(
-      `     Loaded AuthCache metadata: ${JSON.stringify(
-        authFetchCache.loadedAuthCacheMeta,
-        null,
-        3
-      )}`
-    );
-  }
-
-  if (authenticate && steps.includes("fillAC")) {
-    const preCacheStart = new Date().getTime();
-    //make fillAC ensure AT tokens expire 30s later than requested.
-    //Otherwise, they might expire between start of fillAC and end of validateAC step!
-    await authFetchCache.preCache(userCount, ensureAuthExpirationS + 30);
-    const preCacheStop = new Date().getTime();
-    console.log(
-      `PreCache took '${(preCacheStop - preCacheStart) / 1000.0} seconds'`
-    );
-    console.log(`Auth cache now has '${authFetchCache.toCountString()}'`);
-  }
-
-  if (authenticate && steps.includes("validateAC")) {
-    const validateACStart = new Date().getTime();
-    authFetchCache.validate(userCount, ensureAuthExpirationS);
-    const validateACStop = new Date().getTime();
-    console.log(
-      `validateAC took '${(validateACStop - validateACStart) / 1000.0} seconds'`
-    );
-  }
-  if (authenticate && steps.includes("testRequest")) {
-    const testReqStart = new Date().getTime();
-    await authFetchCache.test(1, cssBaseUrl, podFilename, fetchTimeoutMs);
-    const testReqStop = new Date().getTime();
-    console.log(
-      `testRequest took '${(testReqStop - testReqStart) / 1000.0} seconds'`
-    );
-  }
-  if (authenticate && steps.includes("testRequests")) {
-    const testReqsStart = new Date().getTime();
-    await authFetchCache.test(
-      userCount,
-      cssBaseUrl,
-      podFilename,
-      fetchTimeoutMs
-    );
-    const testReqsStop = new Date().getTime();
-    console.log(
-      `testRequests took '${(testReqsStop - testReqsStart) / 1000.0} seconds'`
-    );
-  }
-
-  console.log(`userCount=${userCount} authFetchCache=${authFetchCache}`);
-
-  if (steps.includes("saveAC") && authCacheFile) {
-    console.log(`Saving auth cache to '${authCacheFile}'`);
-    await authFetchCache.save(authCacheFile);
-  }
-
-  const authCacheStatsToObj = function () {
-    return {
-      warning:
-        "Flawed method! " +
-        "You can't accurately time async calls. " +
-        "But the inaccuracies are probably negligible.",
-      fetchUserToken: {
-        min: authFetchCache.tokenFetchDuration.min,
-        max: authFetchCache.tokenFetchDuration.max,
-        avg: authFetchCache.tokenFetchDuration.avg(),
-      },
-      authAccessToken: {
-        min: authFetchCache.authAccessTokenDuration.min,
-        max: authFetchCache.authAccessTokenDuration.max,
-        avg: authFetchCache.authAccessTokenDuration.avg(),
-      },
-      buildingAuthFetcher: {
-        min: authFetchCache.authFetchDuration.min,
-        max: authFetchCache.authFetchDuration.max,
-        avg: authFetchCache.authFetchDuration.avg(),
-      },
-      generateDpopKeyPair: {
-        min: authFetchCache.generateDpopKeyPairDurationCounter.min,
-        max: authFetchCache.generateDpopKeyPairDurationCounter.max,
-        avg: authFetchCache.generateDpopKeyPairDurationCounter.avg(),
-      },
-    };
+  let counter = new Counter();
+  const allFetchStartEnd: { start: number | null; end: number | null } = {
+    start: null,
+    end: null,
   };
 
-  if (!steps.includes("flood")) {
-    const reportObj = {
-      authFetchCache: {
-        stats: authFetchCache.toStatsObj(),
-        durations: authCacheStatsToObj(),
-      },
-    };
-    const reportContent = JSON.stringify(reportObj);
-    if (!reportFile) {
-      console.log(
-        "AUTHENTICATION CACHE STATISTICS:\n---\n" + reportContent + "\n---\n\n"
+  for (const stepName of cli.steps) {
+    if (stepName != "flood") {
+      await runNamedStep(
+        stepName,
+        authFetchCache,
+        cli,
+        counter,
+        allFetchStartEnd
       );
-    } else {
-      console.log(`Writing report to '${reportFile}'...`);
-      await afs.writeFile(reportFile, reportContent);
-      console.log(`Report saved`);
     }
+  }
+
+  if (!cli.steps.includes("flood")) {
+    await reportAuthCacheStatistics(authFetchCache, cli.reportFile);
     console.log(`--steps does not include flood: will exit now`);
     process.exit(0);
   }
 
-  let counter = new Counter();
-  let allFetchStart: number | null = null;
-  let allFetchEnd: number | null = null;
-  const printFinal = async function () {
-    const reportObj = {
-      authFetchCache: {
-        stats: authFetchCache.toStatsObj(),
-        durations: authCacheStatsToObj(),
-      },
-      fetchStatistics: {
-        total: counter.total,
-        success: counter.success,
-        failure: counter.failure,
-        exceptions: counter.exceptions,
-        statuses: counter.statuses,
-        timeout: counter.timeout,
-        durationMs:
-          allFetchStart != null && allFetchEnd != null
-            ? allFetchEnd - allFetchStart
-            : -1,
-      },
-      durationStatistics: {
-        warning:
-          "Flawed method! " +
-          "You can't accurately time async calls. " +
-          "But the inaccuracies are probably negligible.",
-        min: counter.success_duration_ms.min,
-        max: counter.success_duration_ms.max,
-        avg: counter.success_duration_ms.avg(),
-      },
-    };
-    const reportContent = JSON.stringify(reportObj);
-    if (!reportFile) {
-      console.log("FINAL STATISTICS:\n---\n" + reportContent + "\n---\n\n");
-    } else {
-      console.log(`Writing report to '${reportFile}'...`);
-      await afs.writeFile(reportFile, reportContent);
-      console.log(`Report saved`);
-    }
-  };
-
   process.on("SIGINT", function () {
     console.log(`******* GOT SIGINT *****`);
-    console.log(`* Downloads are still in progress...`);
+    console.log(`* Fetches are still in progress...`);
     console.log(`* Dumping statistics and exiting:`);
-    printFinal().finally(() => process.exit(1));
+    reportFinalStatistics(
+      counter,
+      allFetchStartEnd,
+      authFetchCache,
+      cli.reportFile
+    ).finally(() => process.exit(1));
   });
 
-  if (duration) {
-    const durationMillis = duration * 1000;
+  if (cli.processCount == 1) {
+    await stepFlood(authFetchCache, cli, counter, allFetchStartEnd);
 
-    //Execute as many fetches as needed to fill the requested time.
-    let curUserId = 0;
-    const fetchIndexForUser: number[] = Array(userCount).fill(0);
-
-    const requestMaker = () => {
-      const userId = curUserId++;
-      if (curUserId >= userCount) {
-        curUserId = 0;
-      }
-      return fetchPodFile(
-        userId,
-        podFilename,
-        counter,
-        authFetchCache,
-        fetchTimeoutMs,
-        httpVerb,
-        filenameIndexing,
-        fetchIndexForUser[userId]++
-      );
-    };
-    console.log(
-      `Fetching files from ${userCount} users. Max ${parallel} parallel requests. Will stop after ${duration} seconds...`
+    await reportFinalStatistics(
+      counter,
+      allFetchStartEnd,
+      authFetchCache,
+      cli.reportFile
     );
-    allFetchStart = Date.now();
-    for (let p = 0; p < parallel; p++) {
-      promises.push(
-        Promise.race([
-          awaitUntilDeadline(requestMaker, allFetchStart, durationMillis),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("timeout")),
-              durationMillis + 5_000
-            )
-          ),
-        ])
-      );
-    }
-    await Promise.allSettled(promises);
-    allFetchEnd = Date.now();
-    const runMillis = allFetchEnd - allFetchStart;
-    console.log(`All fetches completed after ${runMillis / 1000.0} seconds.`);
-    if (runMillis < durationMillis) {
-      console.error(
-        `ERROR: Fetches completed too early!\n    runtime=${runMillis} ms\n    requested duration=${duration} s (=${durationMillis} ms)\n`
-      );
-      process.exit(1);
-    }
   } else {
-    //Execute all requested fetches, no matter how long it takes.
-    for (let i = 0; i < fetchCount; i++) {
-      for (let j = 0; j < userCount; j++) {
-        requests.push(() =>
-          fetchPodFile(
-            j,
-            podFilename,
-            counter,
-            authFetchCache,
-            fetchTimeoutMs,
-            httpVerb,
-            filenameIndexing,
-            i
-          )
-        );
+    console.log(`Multi process flood. Starting ${cli.processCount} workers...`);
+
+    const msgCheat = new MessageCheat<WorkerMsg>();
+
+    interface ProcessInfo {
+      index: number;
+      process: any;
+      ready: boolean;
+      stats: FloodStatistics | null;
+    }
+
+    //create processes and wait for them
+    const processes: ProcessInfo[] = [];
+    for (let index = 0; index < cli.processCount; index++) {
+      const worker_exe = new URL("./css-flood-worker", import.meta.url)
+        .toString()
+        .replace("file:/", "");
+      const child = fork(worker_exe, []);
+      const p = { index, process: child, ready: false, stats: null };
+      processes.push(p);
+      child.on("message", (message: WorkerMsg) =>
+        msgCheat.messageCallback(message, p)
+      );
+    }
+    console.log(`Workers started. Waiting for ready...`);
+    while (
+      !processes
+        .map((p) => p.ready)
+        .reduce((a: boolean, b: boolean) => a && b, true)
+    ) {
+      const { message, context } = await msgCheat.waitForMessage();
+      if (message.messageType === "WorkerAnnounce") {
+        context.ready = true;
+      } else {
+        throw new Error(`Unexpected message: ${JSON.stringify(message)}`);
       }
     }
-    for (let p = 0; p < parallel; p++) {
-      promises.push(awaitUntilEmpty(requests));
-    }
-    console.log(
-      `Fetching ${fetchCount} files from ${userCount} users (= ${
-        fetchCount * userCount
-      } fetches). Max ${parallel} parallel requests...`
-    );
-    allFetchStart = Date.now();
-    await Promise.allSettled(promises);
-    allFetchEnd = Date.now();
-    const runMillis = allFetchEnd - allFetchStart;
-    console.log(
-      `All ${fetchCount} fetches completed after ${runMillis / 1000.0} seconds.`
-    );
-  }
+    console.log(`Workers ready. Sending config...`);
 
-  await printFinal();
+    //init processes
+    const remainder = cli.fetchCount % cli.processCount;
+    const quotient = (cli.fetchCount - remainder) / cli.processCount;
+    for (const { process, ready, index } of processes) {
+      const processFetchCount = quotient + (index < remainder ? 1 : 0);
+      process.send({
+        messageType: "SetCliArgs",
+        cliArgs: cli,
+        processFetchCount,
+      });
+      process.send({
+        messageType: "SetCache",
+        authCacheContent: JSON.stringify(await authFetchCache.dump()),
+      });
+    }
+    console.log(`Workers configured. Starting flood...`);
+    //run flood
+    for (const p of processes) {
+      p.process.send({
+        messageType: "RunStep",
+        stepName: "flood",
+      });
+    }
+    //gather results and aggregate
+
+    console.log(`Flood started. Waiting for end on all workers...`);
+    while (
+      !processes
+        .map((p) => p.stats != null)
+        .reduce((a: boolean, b: boolean) => a && b, true)
+    ) {
+      const { message, context } = await msgCheat.waitForMessage();
+      if (message.messageType === "ReportStepDone") {
+        console.log(`    ... Worker ${context.process.pid} done`);
+        //ignore
+      } else if (message.messageType === "ReportFloodStatistics") {
+        console.log(
+          `    ... Worker ${context.process.pid} reported statistics`
+        );
+        context.stats = message.statistics;
+        if (
+          typeof message?.statistics?.authFetchCache?.stats?.useCount !=
+          "number"
+        ) {
+          throw new Error(
+            `Invalid stats received: ${JSON.stringify(message.statistics)}`
+          );
+        }
+      } else {
+        throw new Error(`Unexpected message: ${JSON.stringify(message)}`);
+      }
+    }
+    console.log(`Flood ended on all workers. Gathering statistics...`);
+
+    //print statistics
+    const allStats: FloodStatistics[] = <FloodStatistics[]>(
+      processes.map((p) => p.stats)
+    );
+    const aggStats = sumStatistics(allStats);
+    const full = {
+      ...aggStats,
+      byPid: Object.fromEntries(processes.map((p) => [p.process.pid, p.stats])),
+    };
+
+    const reportContent = JSON.stringify(full);
+    if (!cli.reportFile) {
+      console.log("FINAL STATISTICS:\n---\n" + reportContent + "\n---\n\n");
+    } else {
+      console.log(`Writing report to '${cli.reportFile}'...`);
+      await afs.writeFile(cli.reportFile, reportContent);
+      console.log(`Report saved`);
+    }
+  }
 }
 
 try {

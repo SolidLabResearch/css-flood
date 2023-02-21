@@ -1,15 +1,16 @@
 {
   "name": "css-flood",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Tool to flood the Community Solid Server with requests, for testing purposes.",
   "type": "module",
   "bin": {
-    "css-flood": "./bin/css-flood.js"
+    "css-flood": "./bin/css-flood.js",
+    "css-flood-worker": "./bin/css-flood-worker.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "tsc": "tsc",
-    "build": "tsc && chmod u+x ./bin/css-flood.js"
+    "build": "tsc && chmod u+x ./bin/css-flood.js ./bin/css-flood-worker.js"
   },
   "repository": {
     "type": "git",

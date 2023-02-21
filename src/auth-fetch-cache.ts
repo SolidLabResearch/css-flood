@@ -27,6 +27,18 @@ export function fromNow(d?: Date | null): null | string {
   }
 }
 
+export interface AuthFetchCacheStats {
+  cssBaseUrl: string;
+  authenticateCache: "none" | "token" | "all";
+  authenticate: boolean;
+  lenCssTokensByUser: number;
+  lenAuthAccessTokenByUser: number;
+  lenAuthFetchersByUser: number;
+  useCount: number;
+  tokenFetchCount: number;
+  authFetchCount: number;
+}
+
 export class AuthFetchCache {
   cssBaseUrl: string;
   authenticateCache: "none" | "token" | "all" = "none";
@@ -378,7 +390,7 @@ export class AuthFetchCache {
             }`;
   }
 
-  toStatsObj(): object {
+  toStatsObj(): AuthFetchCacheStats {
     return {
       cssBaseUrl: this.cssBaseUrl,
       authenticateCache: this.authenticateCache,
@@ -396,7 +408,7 @@ export class AuthFetchCache {
     return `${this.cssTokensByUser.length} userTokens and ${this.authAccessTokenByUser.length} authAccessTokens`;
   }
 
-  async save(authCacheFile: string) {
+  async dump(): Promise<any> {
     const accessTokenForJson = await Promise.all(
       [...this.authAccessTokenByUser].map(async (accessToken) =>
         !accessToken
@@ -416,19 +428,36 @@ export class AuthFetchCache {
             }
       )
     );
-    const c = {
+    return {
       timestamp: new Date().toISOString(),
-      filename: authCacheFile,
       cssTokensByUser: this.cssTokensByUser,
       authAccessTokenByUser: accessTokenForJson,
     };
-    const cacheContent = JSON.stringify(c);
-    await fs.writeFile(authCacheFile, cacheContent);
+  }
+  async save(authCacheFile: string) {
+    const cacheContent = await this.dump();
+    cacheContent.filename = authCacheFile;
+    await fs.writeFile(authCacheFile, JSON.stringify(cacheContent));
   }
 
   async load(authCacheFile: string) {
     const cacheContent = await fs.readFile(authCacheFile, "utf-8");
+    await this.loadString(cacheContent);
+  }
+
+  async loadString(cacheContent: string) {
     const c = JSON.parse(cacheContent);
+    if (
+      !c.cssTokensByUser ||
+      !c.authAccessTokenByUser ||
+      !c.timestamp ||
+      !Array.isArray(c.cssTokensByUser) ||
+      !Array.isArray(c.authAccessTokenByUser)
+    ) {
+      throw new Error(
+        `Invalid content loaded for AuthFetchCache: ${cacheContent}`
+      );
+    }
     this.cssTokensByUser = c.cssTokensByUser;
     this.authAccessTokenByUser = c.authAccessTokenByUser;
     this.loadedAuthCacheMeta = {
@@ -447,18 +476,16 @@ export class AuthFetchCache {
 
         //because we got if from JSON, accessToken.expire will be a string, not a Date!
         // @ts-ignore
-        if (typeof accessToken.expire === "number") {
-          // @ts-ignore
-          const expireLong: number = accessToken.expire;
-          // @ts-ignore
-          accessToken.expire = new Date(expireLong);
-        } else {
-          console.error(
-            `AccessToken in JSON has expire of unexpected type (${typeof accessToken.expire}) value=${
-              accessToken.expire
-            }`
+        if (typeof accessToken.expire !== "number") {
+          throw new Error(
+            `AccessToken in JSON has expire of unexpected type` +
+              ` (${typeof accessToken.expire} instead of number) value=${
+                accessToken.expire
+              }`
           );
         }
+        const expireLong: number = <number>accessToken.expire;
+        accessToken.expire = new Date(expireLong);
       }
     }
   }
