@@ -53,7 +53,16 @@ async function main() {
         cli = message.cliArgs;
         fetcher = cli.useNodeFetch ? nodeFetch : es6fetch;
         //override fetchCount with the part of the fetchCount for this process
+        console.log(
+          `Overriding for process ${process.pid}: ` +
+            `fetchCount=${message.processFetchCount} instead of ${cli.fetchCount}`
+        );
+        console.log(
+          `Overriding for process ${process.pid}: ` +
+            `  parallel=${message.parallelFetchCount} instead of ${cli.parallel}`
+        );
         cli.fetchCount = message.processFetchCount;
+        cli.parallel = message.parallelFetchCount;
         break;
       }
       case "SetCache": {

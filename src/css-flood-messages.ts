@@ -36,7 +36,8 @@ export interface ReportFloodStatistics {
 export interface SetCliArgs {
   messageType: "SetCliArgs";
   cliArgs: CliArgs;
-  processFetchCount: number; //cliArgs.parallel is fairly divided over all processes
+  processFetchCount: number; //cliArgs.fetchCount is fairly divided over all processes
+  parallelFetchCount: number; //cliArgs.parallel is fairly divided over all processes
 }
 
 export interface SetCache {

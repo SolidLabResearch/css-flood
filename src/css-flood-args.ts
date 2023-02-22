@@ -69,7 +69,7 @@ let ya = yargs(hideBin(process.argv))
     // alias: "uc",
     type: "number",
     description:
-      "Number of client processes to run in parallel. (Fetches are distributed evenly between these processes.)",
+      "Number of client processes to run in parallel. (Fetches and parallel fetches are distributed evenly between these processes.)",
     demandOption: false,
     default: 1,
   })

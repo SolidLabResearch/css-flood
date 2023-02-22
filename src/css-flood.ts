@@ -132,14 +132,18 @@ async function main() {
     console.log(`Workers ready. Sending config...`);
 
     //init processes
-    const remainder = cli.fetchCount % cli.processCount;
-    const quotient = (cli.fetchCount - remainder) / cli.processCount;
+    const fRemainder = cli.fetchCount % cli.processCount;
+    const fQuotient = (cli.fetchCount - fRemainder) / cli.processCount;
+    const pRemainder = cli.parallel % cli.processCount;
+    const pQuotient = (cli.parallel - pRemainder) / cli.processCount;
     for (const { process, ready, index } of processes) {
-      const processFetchCount = quotient + (index < remainder ? 1 : 0);
+      const processFetchCount = fQuotient + (index < fRemainder ? 1 : 0);
+      const parallelFetchCount = pQuotient + (index < pRemainder ? 1 : 0);
       process.send({
         messageType: "SetCliArgs",
         cliArgs: cli,
         processFetchCount,
+        parallelFetchCount,
       });
       process.send({
         messageType: "SetCache",
