@@ -408,8 +408,8 @@ export function sumStatistics(floodStats: FloodStatistics[]): FloodStatistics {
               count: currentValue.count,
             }
           : {
-              min: Math.min(accumulator.min + currentValue.min),
-              max: Math.max(accumulator.max + currentValue.max),
+              min: Math.min(accumulator.min, currentValue.min),
+              max: Math.max(accumulator.max, currentValue.max),
               avg:
                 (accumulator.sum + currentValue.sum) /
                 (accumulator.count + currentValue.count),
