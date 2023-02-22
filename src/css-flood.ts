@@ -101,16 +101,46 @@ async function main() {
       process: any;
       ready: boolean;
       stats: FloodStatistics | null;
+      processFetchCount: number;
+      parallelFetchCount: number;
     }
 
     //create processes and wait for them
+    const fRemainder = cli.fetchCount % cli.processCount;
+    const fQuotient = (cli.fetchCount - fRemainder) / cli.processCount;
+    const pRemainder = cli.parallel % cli.processCount;
+    const pQuotient = (cli.parallel - pRemainder) / cli.processCount;
+
     const processes: ProcessInfo[] = [];
     for (let index = 0; index < cli.processCount; index++) {
       const worker_exe = new URL("./css-flood-worker", import.meta.url)
         .toString()
         .replace("file:/", "");
+      const processFetchCount = fQuotient + (index < fRemainder ? 1 : 0);
+      const parallelFetchCount = pQuotient + (index < pRemainder ? 1 : 0);
+      if (parallelFetchCount === 0) {
+        console.log(
+          `Fewer parallel fetches (=${cli.parallel}) than processes (=${cli.processCount}). ` +
+            `Will not start worker ${index}.`
+        );
+        continue;
+      }
+      if (processFetchCount === 0 && !cli.durationS) {
+        console.log(
+          `Fewer fetches (=${cli.fetchCount}) needed than processes (=${cli.processCount}). ` +
+            `Will not start worker ${index}.`
+        );
+        continue;
+      }
       const child = fork(worker_exe, []);
-      const p = { index, process: child, ready: false, stats: null };
+      const p = {
+        index,
+        process: child,
+        ready: false,
+        stats: null,
+        parallelFetchCount,
+        processFetchCount,
+      };
       processes.push(p);
       child.on("message", (message: WorkerMsg) =>
         msgCheat.messageCallback(message, p)
@@ -132,20 +162,14 @@ async function main() {
     console.log(`Workers ready. Sending config...`);
 
     //init processes
-    const fRemainder = cli.fetchCount % cli.processCount;
-    const fQuotient = (cli.fetchCount - fRemainder) / cli.processCount;
-    const pRemainder = cli.parallel % cli.processCount;
-    const pQuotient = (cli.parallel - pRemainder) / cli.processCount;
-    for (const { process, ready, index } of processes) {
-      const processFetchCount = fQuotient + (index < fRemainder ? 1 : 0);
-      const parallelFetchCount = pQuotient + (index < pRemainder ? 1 : 0);
-      process.send({
+    for (const p of processes) {
+      p.process.send({
         messageType: "SetCliArgs",
         cliArgs: cli,
-        processFetchCount,
-        parallelFetchCount,
+        processFetchCount: p.processFetchCount,
+        parallelFetchCount: p.parallelFetchCount,
       });
-      process.send({
+      p.process.send({
         messageType: "SetCache",
         authCacheContent: JSON.stringify(await authFetchCache.dump()),
       });
