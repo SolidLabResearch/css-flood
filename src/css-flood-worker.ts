@@ -63,6 +63,13 @@ async function main() {
         );
         cli.fetchCount = message.processFetchCount;
         cli.parallel = message.parallelFetchCount;
+        if (typeof message.index === "number") {
+          console.log(
+            `Overriding for process ${process.pid}: ` +
+              `  filenameIndexingStart=${message.index} instead of ${cli.filenameIndexingStart}`
+          );
+          cli.filenameIndexingStart = message.index;
+        }
         break;
       }
       case "SetCache": {

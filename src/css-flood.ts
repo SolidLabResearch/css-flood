@@ -103,6 +103,7 @@ async function main() {
       stats: FloodStatistics | null;
       processFetchCount: number;
       parallelFetchCount: number;
+      filenameIndexingStart?: number;
     }
 
     //create processes and wait for them
@@ -112,6 +113,8 @@ async function main() {
     const pQuotient = (cli.parallel - pRemainder) / cli.processCount;
 
     const processes: ProcessInfo[] = [];
+    let filenameIndexingStart = cli.filenameIndexingStart;
+    const changeIndex = cli.filenameIndexing && !cli.durationS;
     for (let index = 0; index < cli.processCount; index++) {
       const worker_exe = new URL("./css-flood-worker", import.meta.url)
         .toString()
@@ -140,11 +143,16 @@ async function main() {
         stats: null,
         parallelFetchCount,
         processFetchCount,
+        filenameIndexingStart: changeIndex ? filenameIndexingStart : undefined,
       };
       processes.push(p);
       child.on("message", (message: WorkerMsg) =>
         msgCheat.messageCallback(message, p)
       );
+
+      if (changeIndex) {
+        filenameIndexingStart += processFetchCount;
+      }
     }
     console.log(`Workers started. Waiting for ready...`);
     while (
@@ -168,6 +176,7 @@ async function main() {
         cliArgs: cli,
         processFetchCount: p.processFetchCount,
         parallelFetchCount: p.parallelFetchCount,
+        index: p.filenameIndexingStart,
       });
       p.process.send({
         messageType: "SetCache",

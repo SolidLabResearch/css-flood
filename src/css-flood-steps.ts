@@ -574,7 +574,9 @@ export async function stepFlood(
 
     //Execute as many fetches as needed to fill the requested time.
     let curUserId = 0;
-    const fetchIndexForUser: number[] = Array(cli.userCount).fill(0);
+    const fetchIndexForUser: number[] = Array(cli.userCount).fill(
+      cli.filenameIndexingStart
+    );
 
     const requestMaker = () => {
       const userId = curUserId++;
@@ -628,7 +630,11 @@ export async function stepFlood(
     }
   } else {
     //Execute all requested fetches, no matter how long it takes.
-    for (let i = 0; i < cli.fetchCount; i++) {
+    for (
+      let i = cli.filenameIndexingStart;
+      i < cli.filenameIndexingStart + cli.fetchCount;
+      i++
+    ) {
       for (let j = 0; j < cli.userCount; j++) {
         requests.push(() =>
           fetchPodFile(

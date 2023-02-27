@@ -99,8 +99,13 @@ let ya = yargs(hideBin(process.argv))
     type: "boolean",
     description:
       "Replace the literal string 'INDEX' in the filename for each action (upload/download). " +
-      "This way, each fetch uses a unique filename. Index will start from 0 and increment.",
+      "This way, each fetch uses a unique filename. Index will start from 0 (change with --filenameIndexingStart) and increment.",
     default: false,
+  })
+  .option("filenameIndexingStart", {
+    type: "number",
+    description: "Set the index that --filenameIndexing starts with",
+    default: 0,
   })
   .option("uploadSizeByte", {
     type: "number",
@@ -227,6 +232,7 @@ export interface CliArgs {
   cssBaseUrl: string;
   podFilename: string;
   filenameIndexing: boolean;
+  filenameIndexingStart: number;
   httpVerb: HttpVerb;
   mustUpload: boolean;
   uploadSizeByte: number;
@@ -238,6 +244,7 @@ export function getCliArgs(): CliArgs {
     cssBaseUrl: argv.url.endsWith("/") ? argv.url : argv.url + "/",
     podFilename: argv.filename,
     filenameIndexing: argv.filenameIndexing,
+    filenameIndexingStart: argv.filenameIndexingStart,
     httpVerb: httpVerb,
     mustUpload: httpVerb == "POST" || httpVerb == "PUT",
     uploadSizeByte: argv.uploadSizeByte,
