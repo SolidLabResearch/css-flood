@@ -20,8 +20,14 @@ import * as fs from "fs";
 import { promises as afs } from "fs";
 import { AccessToken } from "./solid-auth.js";
 import { webcrypto } from "node:crypto";
-import { CliArgs, HttpVerb, StepName } from "./css-flood-args.js";
+import {
+  CliArgs,
+  FetchScenario,
+  HttpVerb,
+  StepName,
+} from "./css-flood-args.js";
 import { pid } from "node:process";
+import { RDFContentTypeMap, RDFExtMap, RDFTypeValues } from "./rdf-helpers.js";
 
 export function generateUploadData(
   httpVerb: HttpVerb,
@@ -109,6 +115,7 @@ export async function discardBodyData(response: NodeJsResponse | Response) {
 }
 
 export async function fetchPodFile(
+  scenario: FetchScenario,
   userIndex: number,
   podFileRelative: string,
   counter: Counter,
@@ -136,15 +143,47 @@ export async function fetchPodFile(
       signal: AbortSignal.timeout(fetchTimeoutMs), // abort after 4 seconds //supported in nodejs>=17.3
     };
 
-    if (mustUpload) {
-      options.headers = {
-        "Content-type": "application/octet-stream",
-      };
-      options.body = uploadData;
-    }
+    switch (scenario) {
+      case "BASIC": {
+        if (mustUpload) {
+          options.headers = {
+            "Content-type": "application/octet-stream",
+          };
+          options.body = uploadData;
+        }
 
-    if (filenameIndexing) {
-      podFileRelative = podFileRelative.replace("INDEX", `${fetchIndex}`);
+        if (filenameIndexing) {
+          podFileRelative = podFileRelative.replace("INDEX", `${fetchIndex}`);
+        }
+        break;
+      }
+      case "CONTENT_TRANSLATION": {
+        console.assert(httpVerb == "GET");
+        //We use fetchIndex to select a combination of filename and Content-type
+        // There are (RDFTypeValues.length-1) files that can be requested  (since we exclude RDF_XML)
+        // There are (RDFTypeValues.length-1) types to request each file in (because we don't request them in their own type.)
+        // That's (RDFTypeValues.length-1)*(RDFTypeValues.length-1) combinations
+        const combinationId =
+          fetchIndex %
+          ((RDFTypeValues.length - 1) * (RDFTypeValues.length - 1));
+        const fileNameIndex = combinationId % (RDFTypeValues.length - 1);
+        const contentTypeIndex = Math.floor(
+          (combinationId - fileNameIndex) / (RDFTypeValues.length - 1)
+        );
+        const filenameType =
+          fileNameIndex >= RDFTypeValues.indexOf("RDF_XML")
+            ? RDFTypeValues[fileNameIndex + 1]
+            : RDFTypeValues[fileNameIndex];
+        const contentTypeType =
+          contentTypeIndex == RDFTypeValues.indexOf(filenameType)
+            ? RDFTypeValues[RDFTypeValues.length - 1]
+            : RDFTypeValues[contentTypeIndex];
+        podFileRelative = `rdf_example_${filenameType}.${RDFExtMap[filenameType]}`;
+        options.headers = {
+          "Content-type": RDFContentTypeMap[contentTypeType],
+        };
+        break;
+      }
     }
 
     const url = `${cssBaseUrl}${account}/${podFileRelative}`;
@@ -584,6 +623,7 @@ export async function stepFlood(
         curUserId = 0;
       }
       return fetchPodFile(
+        cli.scenario,
         userId,
         cli.podFilename,
         counter,
@@ -638,6 +678,7 @@ export async function stepFlood(
       for (let j = 0; j < cli.userCount; j++) {
         requests.push(() =>
           fetchPodFile(
+            cli.scenario,
             j,
             cli.podFilename,
             counter,

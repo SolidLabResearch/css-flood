@@ -26,23 +26,27 @@ let ya = yargs(hideBin(process.argv))
   .usage("Usage: $0 --url <url> [--steps <steps>] ...")
   //general options
   .option("url", {
+    group: "Base:",
     // alias: "u",
     type: "string",
     description: "Base URL of the CSS",
     demandOption: true,
   })
   .option("steps", {
+    group: "Base:",
     type: "string",
     description: `The steps that need to run, as a comma separated list. See below for more details.`,
     default: "flood",
   })
   .option("reportFile", {
+    group: "Base:",
     type: "string",
     description:
       "File to save report to (JSON format). Of not specified, the report is sent to stdout like the other output.",
   })
   //flood config
   .option("duration", {
+    group: "Fetcher Setup:",
     // alias: "fc",
     type: "number",
     description:
@@ -52,6 +56,7 @@ let ya = yargs(hideBin(process.argv))
     demandOption: false,
   })
   .option("fetchCount", {
+    group: "Fetcher Setup:",
     // alias: "fc",
     type: "number",
     description: "Number of fetches per user during the flood.",
@@ -59,6 +64,7 @@ let ya = yargs(hideBin(process.argv))
     default: 10,
   })
   .option("parallel", {
+    group: "Fetcher Setup:",
     // alias: "pc",
     type: "number",
     description: "Number of fetches in parallel during the flood.",
@@ -66,6 +72,7 @@ let ya = yargs(hideBin(process.argv))
     default: 10,
   })
   .option("processCount", {
+    group: "Fetcher Setup:",
     // alias: "uc",
     type: "number",
     description:
@@ -74,6 +81,7 @@ let ya = yargs(hideBin(process.argv))
     default: 1,
   })
   .option("userCount", {
+    group: "Fetcher Setup:",
     // alias: "uc",
     type: "number",
     description: "Number of users",
@@ -81,6 +89,7 @@ let ya = yargs(hideBin(process.argv))
     default: 10,
   })
   .option("fetchTimeoutMs", {
+    group: "Fetch Action:",
     // alias: "t",
     type: "number",
     description:
@@ -89,6 +98,7 @@ let ya = yargs(hideBin(process.argv))
     default: 4_000,
   })
   .option("filename", {
+    group: "Fetch Action:",
     // alias: "f",
     type: "string",
     description:
@@ -96,6 +106,7 @@ let ya = yargs(hideBin(process.argv))
     default: "10.rnd",
   })
   .option("filenameIndexing", {
+    group: "Fetch Action:",
     type: "boolean",
     description:
       "Replace the literal string 'INDEX' in the filename for each action (upload/download). " +
@@ -103,30 +114,43 @@ let ya = yargs(hideBin(process.argv))
     default: false,
   })
   .option("filenameIndexingStart", {
+    group: "Fetch Action:",
     type: "number",
     description: "Set the index that --filenameIndexing starts with",
     default: 0,
   })
   .option("uploadSizeByte", {
+    group: "Fetch Action:",
     type: "number",
     description: "Number of bytes of (random) data to upload for POST/PUT",
     default: 10,
   })
   .option("verb", {
+    group: "Fetch Action:",
     // alias: "v",
     type: "string",
     choices: ["GET", "PUT", "POST", "DELETE"],
     description: "HTTP verb to use for the flood: GET/PUT/POST/DELETE",
     default: "GET",
   })
+  .option("scenario", {
+    group: "Fetch Action:",
+    type: "string",
+    choices: ["BASIC", "CONTENT_TRANSLATION"],
+    description:
+      "Fetch scenario: what sort of fetch action is this? BASIC is a simple file upload/download/delete.",
+    default: "BASIC",
+  })
   //authentication
   .option("authenticate", {
+    group: "Fetch Authentication:",
     // alias: "a",
     type: "boolean",
     description: "Authenticated as the user owning the target file",
     default: false,
   })
   .option("authenticateCache", {
+    group: "Fetch Authentication:",
     type: "string",
     choices: ["none", "token", "all"],
     description:
@@ -134,10 +158,12 @@ let ya = yargs(hideBin(process.argv))
     default: "all",
   })
   .option("authCacheFile", {
+    group: "Fetch Authentication:",
     type: "string",
     description: "File to load/save the authentication cache from/to",
   })
   .option("ensureAuthExpiration", {
+    group: "Fetch Authentication:",
     type: "number",
     default: 90,
     description:
@@ -145,6 +171,7 @@ let ya = yargs(hideBin(process.argv))
   })
   //advanced
   .option("fetchVersion", {
+    group: "Advanced:",
     type: "string",
     choices: ["node", "es6"],
     description:
@@ -215,6 +242,8 @@ export enum HttpVerb {
   DELETE = "DELETE",
 }
 
+export type FetchScenario = "BASIC" | "CONTENT_TRANSLATION";
+
 export interface CliArgs {
   userCount: number;
   fetchTimeoutMs: number;
@@ -236,6 +265,7 @@ export interface CliArgs {
   httpVerb: HttpVerb;
   mustUpload: boolean;
   uploadSizeByte: number;
+  scenario: FetchScenario;
 }
 
 export function getCliArgs(): CliArgs {
@@ -248,6 +278,7 @@ export function getCliArgs(): CliArgs {
     httpVerb: httpVerb,
     mustUpload: httpVerb == "POST" || httpVerb == "PUT",
     uploadSizeByte: argv.uploadSizeByte,
+    scenario: <FetchScenario>argv.scenario,
 
     userCount: argv.userCount || 1,
     fetchTimeoutMs: argv.fetchTimeoutMs || 4_000,
