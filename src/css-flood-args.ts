@@ -136,7 +136,7 @@ let ya = yargs(hideBin(process.argv))
   .option("scenario", {
     group: "Fetch Action:",
     type: "string",
-    choices: ["BASIC", "CONTENT_TRANSLATION"],
+    choices: ["BASIC", "CONTENT_TRANSLATION", "NO_CONTENT_TRANSLATION"],
     description:
       "Fetch scenario: what sort of fetch action is this? BASIC is a simple file upload/download/delete.",
     default: "BASIC",
@@ -242,7 +242,10 @@ export enum HttpVerb {
   DELETE = "DELETE",
 }
 
-export type FetchScenario = "BASIC" | "CONTENT_TRANSLATION";
+export type FetchScenario =
+  | "BASIC"
+  | "CONTENT_TRANSLATION"
+  | "NO_CONTENT_TRANSLATION";
 
 export interface CliArgs {
   userCount: number;

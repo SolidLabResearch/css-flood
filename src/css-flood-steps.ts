@@ -157,31 +157,75 @@ export async function fetchPodFile(
         }
         break;
       }
-      case "CONTENT_TRANSLATION": {
+      case "NO_CONTENT_TRANSLATION": {
+        //No content translation: we fetch the requested files in their own content-type
         console.assert(httpVerb == "GET");
-        //We use fetchIndex to select a combination of filename and Content-type
-        // There are (RDFTypeValues.length-1) files that can be requested  (since we exclude RDF_XML)
-        // There are (RDFTypeValues.length-1) types to request each file in (because we don't request them in their own type.)
-        // That's (RDFTypeValues.length-1)*(RDFTypeValues.length-1) combinations
-        const combinationId =
-          fetchIndex %
-          ((RDFTypeValues.length - 1) * (RDFTypeValues.length - 1));
-        const fileNameIndex = combinationId % (RDFTypeValues.length - 1);
-        const contentTypeIndex = Math.floor(
-          (combinationId - fileNameIndex) / (RDFTypeValues.length - 1)
-        );
-        const filenameType =
-          fileNameIndex >= RDFTypeValues.indexOf("RDF_XML")
-            ? RDFTypeValues[fileNameIndex + 1]
-            : RDFTypeValues[fileNameIndex];
-        const contentTypeType =
-          contentTypeIndex == RDFTypeValues.indexOf(filenameType)
-            ? RDFTypeValues[RDFTypeValues.length - 1]
-            : RDFTypeValues[contentTypeIndex];
+
+        const typeIndex = fetchIndex % (RDFTypeValues.length - 2);
+        const filenameType = RDFTypeValues[typeIndex];
+        const contentTypeType = RDFTypeValues[typeIndex];
+
         podFileRelative = `rdf_example_${filenameType}.${RDFExtMap[filenameType]}`;
         options.headers = {
           "Content-type": RDFContentTypeMap[contentTypeType],
         };
+        if (userIndex < 2 && fetchIndex < 25) {
+          console.log(
+            `DEBUG ${scenario}: download "${podFileRelative}" as "${options.headers["Content-type"]}"`
+          );
+        }
+        break;
+      }
+      case "CONTENT_TRANSLATION": {
+        console.assert(httpVerb == "GET");
+
+        //for convenience "RDF_XML" is the last of RDFTypeValues
+
+        // //**version that includes RDF_XML in content-type but not in filename**:
+        // //We use fetchIndex to select a combination of filename and Content-type
+        // // There are (RDFTypeValues.length-1) files that can be requested  (since we exclude RDF_XML)
+        // // There are (RDFTypeValues.length-1) types to request each file in (because we don't request them in their own type but include RDF_XML.)
+        // // That's (RDFTypeValues.length-1)*(RDFTypeValues.length-1) combinations
+        // const combinationId =
+        //   fetchIndex %
+        //   ((RDFTypeValues.length - 1) * (RDFTypeValues.length - 1));
+        // const fileNameIndex = combinationId % (RDFTypeValues.length - 1);
+        // const contentTypeIndex = Math.floor(
+        //   (combinationId - fileNameIndex) / (RDFTypeValues.length - 1)
+        // );
+        // const filenameType = RDFTypeValues[fileNameIndex];
+        // const contentTypeType =
+        //   contentTypeIndex == RDFTypeValues.indexOf(filenameType)
+        //     ? RDFTypeValues[contentTypeIndex + 1]
+        //     : RDFTypeValues[contentTypeIndex];
+
+        //**version that does not include RDF_XML at all**:
+        //We use fetchIndex to select a combination of filename and Content-type
+        // There are (RDFTypeValues.length-1) files that can be requested  (since we exclude RDF_XML)
+        // There are (RDFTypeValues.length-2) types to request each file in (because we don't request them in their own type and exlude RDF_XML.)
+        // That's (RDFTypeValues.length-1)*(RDFTypeValues.length-2) combinations
+        const combinationId =
+          fetchIndex %
+          ((RDFTypeValues.length - 1) * (RDFTypeValues.length - 2));
+        const fileNameIndex = combinationId % (RDFTypeValues.length - 1);
+        let contentTypeIndex = Math.floor(
+          (combinationId - fileNameIndex) / (RDFTypeValues.length - 1)
+        );
+        const filenameType = RDFTypeValues[fileNameIndex];
+        const contentTypeType =
+          contentTypeIndex == RDFTypeValues.indexOf(filenameType)
+            ? RDFTypeValues[RDFTypeValues.length - 2]
+            : RDFTypeValues[contentTypeIndex];
+
+        podFileRelative = `rdf_example_${filenameType}.${RDFExtMap[filenameType]}`;
+        options.headers = {
+          "Content-type": RDFContentTypeMap[contentTypeType],
+        };
+        if (userIndex < 2 && fetchIndex < 25) {
+          console.log(
+            `DEBUG ${scenario}: download "${podFileRelative}" as "${options.headers["Content-type"]}"`
+          );
+        }
         break;
       }
     }

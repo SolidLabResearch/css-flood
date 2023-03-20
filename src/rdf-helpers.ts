@@ -1,10 +1,10 @@
 export const RDFTypeValues = [
   "TURTLE",
   "N_TRIPLES",
-  "RDF_XML",
   "JSON_LD",
   "N3",
   "N_QUADS",
+  "RDF_XML",
 ] as const;
 export type RDFType = typeof RDFTypeValues[number];
 export const RDFContentTypeMap: { [Property in RDFType]: string } = {
