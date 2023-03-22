@@ -166,9 +166,10 @@ export async function fetchPodFile(
         const contentTypeType = RDFTypeValues[typeIndex];
 
         podFileRelative = `rdf_example_${filenameType}.${RDFExtMap[filenameType]}`;
-        options.headers = {
-          "Content-type": RDFContentTypeMap[contentTypeType],
-        };
+        //No content translation, so just don't specify Accept header.
+        // options.headers = {
+        //   "Accept": RDFContentTypeMap[contentTypeType],
+        // };
         if (userIndex < 2 && fetchIndex < 25) {
           console.log(
             `DEBUG ${scenario}: download "${podFileRelative}" as "${options.headers["Content-type"]}"`
@@ -219,7 +220,7 @@ export async function fetchPodFile(
 
         podFileRelative = `rdf_example_${filenameType}.${RDFExtMap[filenameType]}`;
         options.headers = {
-          "Content-type": RDFContentTypeMap[contentTypeType],
+          Accept: RDFContentTypeMap[contentTypeType],
         };
         if (userIndex < 2 && fetchIndex < 25) {
           console.log(
