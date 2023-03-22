@@ -158,7 +158,7 @@ export async function fetchPodFile(
         break;
       }
       case "NO_CONTENT_TRANSLATION": {
-        //No content translation: we fetch the requested files in their own content-type
+        //No content translation: we fetch the requested files in their own content-type (= no Accept header)
         console.assert(httpVerb == "GET");
 
         const typeIndex = fetchIndex % (RDFTypeValues.length - 2);
@@ -172,7 +172,7 @@ export async function fetchPodFile(
         // };
         if (userIndex < 2 && fetchIndex < 25) {
           console.log(
-            `DEBUG ${scenario}: download "${podFileRelative}" as "${options.headers["Content-type"]}"`
+            `DEBUG ${scenario}: download "${podFileRelative}" without Accept header"`
           );
         }
         break;
@@ -182,8 +182,8 @@ export async function fetchPodFile(
 
         //for convenience "RDF_XML" is the last of RDFTypeValues
 
-        // //**version that includes RDF_XML in content-type but not in filename**:
-        // //We use fetchIndex to select a combination of filename and Content-type
+        // //**version that includes RDF_XML in Accept but not in filename**:
+        // //We use fetchIndex to select a combination of filename and Accept
         // // There are (RDFTypeValues.length-1) files that can be requested  (since we exclude RDF_XML)
         // // There are (RDFTypeValues.length-1) types to request each file in (because we don't request them in their own type but include RDF_XML.)
         // // That's (RDFTypeValues.length-1)*(RDFTypeValues.length-1) combinations
@@ -201,7 +201,7 @@ export async function fetchPodFile(
         //     : RDFTypeValues[contentTypeIndex];
 
         //**version that does not include RDF_XML at all**:
-        //We use fetchIndex to select a combination of filename and Content-type
+        //We use fetchIndex to select a combination of filename and Accept
         // There are (RDFTypeValues.length-1) files that can be requested  (since we exclude RDF_XML)
         // There are (RDFTypeValues.length-2) types to request each file in (because we don't request them in their own type and exlude RDF_XML.)
         // That's (RDFTypeValues.length-1)*(RDFTypeValues.length-2) combinations
@@ -224,7 +224,7 @@ export async function fetchPodFile(
         };
         if (userIndex < 2 && fetchIndex < 25) {
           console.log(
-            `DEBUG ${scenario}: download "${podFileRelative}" as "${options.headers["Content-type"]}"`
+            `DEBUG ${scenario}: download "${podFileRelative}" as "${options.headers["Accept"]}"`
           );
         }
         break;
