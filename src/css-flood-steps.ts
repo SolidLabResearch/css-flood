@@ -172,7 +172,7 @@ export async function fetchPodFile(
         // };
         if (userIndex < 2 && fetchIndex < 25) {
           console.log(
-            `DEBUG ${scenario}: download "${podFileRelative}" without Accept header"`
+            `DEBUG ${scenario}: download u${userIndex}-f${fetchIndex} "${podFileRelative}" without Accept header"`
           );
         }
         break;
@@ -224,7 +224,7 @@ export async function fetchPodFile(
         };
         if (userIndex < 2 && fetchIndex < 25) {
           console.log(
-            `DEBUG ${scenario}: download "${podFileRelative}" as "${options.headers["Accept"]}"`
+            `DEBUG ${scenario}: download u${userIndex}-f${fetchIndex} "${podFileRelative}" as "${options.headers["Accept"]}"`
           );
         }
         break;

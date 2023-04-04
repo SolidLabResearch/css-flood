@@ -143,7 +143,8 @@ async function main() {
         stats: null,
         parallelFetchCount,
         processFetchCount,
-        filenameIndexingStart: changeIndex ? filenameIndexingStart : undefined,
+        //default filenameIndexingStart to index: (NO_)CONTENT_TRANSLATION also uses this
+        filenameIndexingStart: changeIndex ? filenameIndexingStart : index,
       };
       processes.push(p);
       child.on("message", (message: WorkerMsg) =>

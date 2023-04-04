@@ -34,36 +34,54 @@ css-flood --help
 Help:
 
 ```
-Usage: css-flood --url <url> [--steps <steps>] ...
+Usage: css-flood.js --url <url> [--steps <steps>] ...
+
+Base:
+  --url         Base URL of the CSS                                                                  [string] [required]
+  --steps       The steps that need to run, as a comma separated list. See below for more details.
+                                                                                             [string] [default: "flood"]
+  --reportFile  File to save report to (JSON format). Of not specified, the report is sent to stdout like the other outp
+                ut.                                                                                             [string]
+
+Fetcher Setup:
+  --duration      Total duration (in seconds) of the flood. After this time, no new fetches are done. If this option is
+                  used, --fetchCount is ignored.Default: run until all requested fetches are done.              [number]
+  --fetchCount    Number of fetches per user during the flood.                                    [number] [default: 10]
+  --parallel      Number of fetches in parallel during the flood.                                 [number] [default: 10]
+  --processCount  Number of client processes to run in parallel. (Fetches and parallel fetches are distributed evenly be
+                  tween these processes.)                                                          [number] [default: 1]
+  --userCount     Number of users                                                                 [number] [default: 10]
+
+Fetch Action:
+  --fetchTimeoutMs         How long before aborting a fetch because it takes too long? (in ms)  [number] [default: 4000]
+  --filename               Remote file to download from pod, or filename of file to upload to pod
+                                                                                            [string] [default: "10.rnd"]
+  --filenameIndexing       Replace the literal string 'INDEX' in the filename for each action (upload/download). This wa
+                           y, each fetch uses a unique filename. Index will start from 0 (change with --filenameIndexing
+                           Start) and increment.                                              [boolean] [default: false]
+  --filenameIndexingStart  Set the index that --filenameIndexing starts with                       [number] [default: 0]
+  --uploadSizeByte         Number of bytes of (random) data to upload for POST/PUT                [number] [default: 10]
+  --verb                   HTTP verb to use for the flood: GET/PUT/POST/DELETE
+                                                     [string] [choices: "GET", "PUT", "POST", "DELETE"] [default: "GET"]
+  --scenario               Fetch scenario: what sort of fetch action is this? BASIC is a simple file upload/download/del
+                           ete.
+                         [string] [choices: "BASIC", "CONTENT_TRANSLATION", "NO_CONTENT_TRANSLATION"] [default: "BASIC"]
+
+Fetch Authentication:
+  --authenticate          Authenticated as the user owning the target file                    [boolean] [default: false]
+  --authenticateCache     How much authentication should be cached? All authentication (=all)? Only the CSS user token (
+                          =token)? Or no caching (=none)?    [string] [choices: "none", "token", "all"] [default: "all"]
+  --authCacheFile         File to load/save the authentication cache from/to                                    [string]
+  --ensureAuthExpiration  fillAC and validateAC will ensure the authentication cache content is still valid for at least
+                           this number of seconds                                                 [number] [default: 90]
+
+Advanced:
+  --fetchVersion  Use node-fetch or ES6 fetch (ES6 fetch is only available for nodejs versions >= 18)
+                                                                     [string] [choices: "node", "es6"] [default: "node"]
 
 Options:
-  --version            Show version number                                                                     [boolean]
-  --url                Base URL of the CSS                                                           [string] [required]
-  --steps              The steps that need to run, as a comma separated list. See below for more details.
-                                                                                             [string] [default: "flood"]
-  --reportFile         File to save report to (JSON format). Of not specified, the report is sent to stdout like the oth
-                       er output.                                                                               [string]
-  --duration           Total duration (in seconds) of the flood. After this time, no new fetches are done. If this optio
-                       n is used, --fetchCount is ignored.Default: run until all requested fetches are done.   [number]
-  --fetchCount         Number of fetches per user during the flood.                               [number] [default: 10]
-  --parallel           Number of fetches in parallel during the flood.                            [number] [default: 10]
-  --userCount          Number of users                                                            [number] [default: 10]
-  --fetchTimeoutMs     How long before aborting a fetch because it takes too long? (in ms)      [number] [default: 4000]
-  --filename           Remote file to download from pod, or filename of file to upload to pod
-                                                                                            [string] [default: "10.rnd"]
-  --filenameIndexing   Replace the literal string 'INDEX' in the filename for each action (upload/download). This way, e
-                       ach fetch uses a unique filename. Index will start from 0 and increment.
-                                                                                              [boolean] [default: false]
-  --uploadSizeByte     Number of bytes of (random) data to upload for POST/PUT                    [number] [default: 10]
-  --verb               HTTP verb to use for the flood: GET/PUT/POST/DELETE
-                                                     [string] [choices: "GET", "PUT", "POST", "DELETE"] [default: "GET"]
-  --authenticate       Authenticated as the user owning the target file                       [boolean] [default: false]
-  --authenticateCache  How much authentication should be cached? All authentication (=all)? Only the CSS user token (=to
-                       ken)? Or no caching (=none)?          [string] [choices: "none", "token", "all"] [default: "all"]
-  --authCacheFile      File to load/save the authentication cache from/to                                       [string]
-  --fetchVersion       Use node-fetch or ES6 fetch (ES6 fetch is only available for nodejs versions >= 18)
-                                                                     [string] [choices: "node", "es6"] [default: "node"]
-  --help               Show help                                                                               [boolean]
+  --version  Show version number                                                                               [boolean]
+  --help     Show help                                                                                         [boolean]
 
 Details for --steps:
 
@@ -81,6 +99,8 @@ The steps that can run are (always in this order):
 - fillAC: Perform authentication of all users, which fills the authentication cache.
 - validateAC: Check if all entries in the authentication cache are up to date.
               This step causes exit with code 1 if there is at least one cache entry that has expired.
+- testRequest: Do 1 request (typically a GET to download a file) for the first user.
+               This tests both the data in the authentication cache (adding missing entries), and the actual request.
 - testRequests: Do 1 request (typically a GET to download a file) for each users (back-to-back, not in parallel).
                 This tests both the data in the authentication cache (adding missing entries), and the actual request.
 - saveAC: Save the authentication cache to file.
@@ -90,10 +110,10 @@ Examples:
 --steps 'loadAC,validateAC,flood'
 --steps 'fillAC,saveAC'
 --steps 'loadAC,fillAC,saveAC'
---steps 'loadAC,testRequests,saveAC,flood'
+--steps 'loadAC,testRequest,saveAC,flood'
 
 All steps (makes little sense):
---steps 'loadAC,fillAC,validateAC,testRequests,saveAC,flood'
+--steps 'loadAC,fillAC,validateAC,testRequest,testRequests,saveAC,flood'
 
 ```
 
