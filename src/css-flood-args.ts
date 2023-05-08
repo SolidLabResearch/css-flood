@@ -129,14 +129,19 @@ let ya = yargs(hideBin(process.argv))
     group: "Fetch Action:",
     // alias: "v",
     type: "string",
-    choices: ["GET", "PUT", "POST", "DELETE"],
+    choices: ["GET", "PUT", "POST", "DELETE", "PATCH"],
     description: "HTTP verb to use for the flood: GET/PUT/POST/DELETE",
     default: "GET",
   })
   .option("scenario", {
     group: "Fetch Action:",
     type: "string",
-    choices: ["BASIC", "CONTENT_TRANSLATION", "NO_CONTENT_TRANSLATION"],
+    choices: [
+      "BASIC",
+      "CONTENT_TRANSLATION",
+      "NO_CONTENT_TRANSLATION",
+      "N3_PATCH",
+    ],
     description:
       "Fetch scenario: what sort of fetch action is this? BASIC is a simple file upload/download/delete.",
     default: "BASIC",
@@ -177,6 +182,13 @@ let ya = yargs(hideBin(process.argv))
     description:
       "Use node-fetch or ES6 fetch (ES6 fetch is only available for nodejs versions >= 18)",
     default: "node",
+  })
+  .option("n3PatchGenFile", {
+    group: "Advanced:",
+    type: "string",
+    description:
+      "(For scenario N3_PATCH only:) A file with the content of the target N-triples file that will be patched. This will be used to generate a random N3 PATCH.",
+    demandOption: false,
   })
   .epilogue(
     `Details for --steps:
@@ -228,6 +240,15 @@ All steps (makes little sense):
     });
     return res;
   })
+  .check((argv, options) => {
+    if (argv.scenario == "N3_PATCH" && argv.verb != "PATCH") {
+      throw new Error("--scenario N3_PATCH implies --verb PATCH");
+    }
+    if (argv.scenario == "N3_PATCH" && !argv.n3PatchGenFile) {
+      throw new Error("--scenario N3_PATCH requires --n3PatchGenFile");
+    }
+    return true;
+  })
   .help()
   .wrap(120)
   .strict(true);
@@ -239,11 +260,13 @@ export enum HttpVerb {
   GET = "GET",
   PUT = "PUT",
   POST = "POST",
+  PATCH = "PATCH",
   DELETE = "DELETE",
 }
 
 export type FetchScenario =
   | "BASIC"
+  | "N3_PATCH"
   | "CONTENT_TRANSLATION"
   | "NO_CONTENT_TRANSLATION";
 
@@ -269,6 +292,7 @@ export interface CliArgs {
   mustUpload: boolean;
   uploadSizeByte: number;
   scenario: FetchScenario;
+  n3PatchGenFilename?: string;
 }
 
 export function getCliArgs(): CliArgs {
@@ -279,7 +303,7 @@ export function getCliArgs(): CliArgs {
     filenameIndexing: argv.filenameIndexing,
     filenameIndexingStart: argv.filenameIndexingStart,
     httpVerb: httpVerb,
-    mustUpload: httpVerb == "POST" || httpVerb == "PUT",
+    mustUpload: httpVerb == "POST" || httpVerb == "PUT" || httpVerb == "PATCH",
     uploadSizeByte: argv.uploadSizeByte,
     scenario: <FetchScenario>argv.scenario,
 
@@ -299,5 +323,6 @@ export function getCliArgs(): CliArgs {
 
     //TODO ignore AC steps if !cli.authenticate
     steps: <StepName[]>argv.steps,
+    n3PatchGenFilename: argv.n3PatchGenFile,
   };
 }

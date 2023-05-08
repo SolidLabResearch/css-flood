@@ -28,6 +28,9 @@ import {
 } from "./css-flood-args.js";
 import { pid } from "node:process";
 import { RDFContentTypeMap, RDFExtMap, RDFTypeValues } from "./rdf-helpers.js";
+import N3, { Quad } from "n3";
+import { Writable } from "stream";
+import { pipeline } from "node:stream/promises";
 
 export function generateUploadData(
   httpVerb: HttpVerb,
@@ -46,6 +49,111 @@ export function generateUploadData(
     `Generating random data for upload took ${durationMs}ms (for ${uploadSizeByte} bytes)`
   );
   return res;
+}
+
+export async function generateN3PatchData(
+  n3PatchGenFilename: string
+): Promise<ArrayBuffer> {
+  const subjectsWithName: Set<string> = new Set();
+
+  const namePred = N3.DataFactory.namedNode(
+    "http://nl.dbpedia.org/property/naam"
+  );
+  console.log("Looking for ", namePred);
+
+  {
+    const inputStream = fs.createReadStream(n3PatchGenFilename);
+    const parserStream = new N3.StreamParser();
+    inputStream.pipe(parserStream);
+    const processor = new Writable({ objectMode: true });
+    processor._write = (quad: Quad, encoding, done) => {
+      if (quad.predicate.id == namePred.id) {
+        subjectsWithName.add(quad.subject.value);
+      }
+      done();
+    };
+    parserStream.on("end", () => {
+      console.log(`Parse end`);
+    });
+    parserStream.on("error", (error) => {
+      console.log(`Parse problem`, error);
+    });
+    // parserStream.pipe(processor);
+    await pipeline(parserStream, processor);
+  }
+
+  console.log(`Got ${subjectsWithName.size} subjects with a name`);
+  if (subjectsWithName.size === 0) {
+    throw new Error(`No expected RDF data read from ${n3PatchGenFilename}`);
+  }
+
+  const randomSubject = [...subjectsWithName][
+    Math.floor(Math.random() * (subjectsWithName.size - 1))
+  ];
+  console.log(`Chose random subject ${randomSubject}`);
+
+  let oldValue = "unknown";
+  const otherQuadInfo: string[][] = [];
+  {
+    const inputStream = fs.createReadStream(n3PatchGenFilename);
+    const parserStream = new N3.StreamParser();
+    inputStream.pipe(parserStream);
+    const processor = new Writable({ objectMode: true });
+    processor._write = (quad: Quad, encoding, done) => {
+      if (
+        quad.subject.value === randomSubject &&
+        quad.predicate.id == namePred.id
+      ) {
+        oldValue = quad.object.value;
+      }
+      if (
+        quad.subject.value === randomSubject &&
+        quad.predicate.id != namePred.id
+      ) {
+        otherQuadInfo.push([quad.predicate.value, quad.object.value]);
+      }
+      done();
+    };
+    parserStream.on("end", () => {
+      console.log(`Parse end`);
+    });
+    parserStream.on("error", (error) => {
+      console.log(`Parse problem`, error);
+    });
+    // parserStream.pipe(processor);
+    await pipeline(parserStream, processor);
+  }
+
+  console.log(`Got ${otherQuadInfo.length} otherQuadInfo`);
+  if (otherQuadInfo.length === 0) {
+    throw new Error(`otherQuadInfo.length === 0`);
+  }
+
+  const i = Math.floor(Math.random() * (otherQuadInfo.length - 1));
+  let matchingOtherProp = otherQuadInfo[i][0];
+  let matchingOtherObject = otherQuadInfo[i][1];
+
+  let newValue = `Some Random Value ${Math.floor(
+    Math.random() * 1000.0
+  )} ${Math.floor(Math.random() * 1000.0)}`;
+
+  console.log(`oldValue`, oldValue);
+  console.log(`newValue`, newValue);
+  console.log(`matchingOtherProp`, matchingOtherProp);
+  console.log(`matchingOtherObject`, matchingOtherObject);
+
+  const n3Patch = `@prefix solid: <http://www.w3.org/ns/solid/terms#>.
+@prefix prop: <http://nl.dbpedia.org/property#>.
+
+_:rename a solid:InsertDeletePatch;
+  solid:where   { ?infobox <${matchingOtherProp}> "${matchingOtherObject}". };
+  solid:inserts { ?infobox prop:name "${newValue}". };
+  solid:deletes { ?infobox prop:name "${oldValue}". }.
+`;
+
+  console.log(`n3Patch`, n3Patch);
+
+  return new Uint8Array(Buffer.from(n3Patch, "base64"));
 }
 
 export interface StatusNumberInfo {
@@ -155,6 +263,19 @@ export async function fetchPodFile(
         if (filenameIndexing) {
           podFileRelative = podFileRelative.replace("INDEX", `${fetchIndex}`);
         }
+        break;
+      }
+      case "N3_PATCH": {
+        console.assert(mustUpload);
+        console.assert(httpVerb == "PATCH");
+
+        // N3 PATCH requires "text/n3" content type header (see https://solidproject.org/TR/protocol#writing-resources)
+        options.headers = {
+          "Content-type": "text/n3",
+        };
+        options.body = uploadData;
+
+        podFileRelative = `rdf_example_N_TRIPLES.nt`;
         break;
       }
       case "NO_CONTENT_TRANSLATION": {
@@ -646,9 +767,12 @@ export async function stepFlood(
   counter: Counter,
   allFetchStartEnd: { start: number | null; end: number | null }
 ) {
-  const uploadData = cli.mustUpload
-    ? generateUploadData(cli.httpVerb, cli.uploadSizeByte)
-    : undefined;
+  const uploadData =
+    cli.scenario == "N3_PATCH"
+      ? await generateN3PatchData(cli.n3PatchGenFilename!)
+      : cli.mustUpload
+      ? generateUploadData(cli.httpVerb, cli.uploadSizeByte)
+      : undefined;
 
   const requests = [];
   const promises = [];
