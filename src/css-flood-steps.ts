@@ -28,9 +28,14 @@ import {
 } from "./css-flood-args.js";
 import { pid } from "node:process";
 import { RDFContentTypeMap, RDFExtMap, RDFTypeValues } from "./rdf-helpers.js";
-import N3, { Quad } from "n3";
+import N3, { BlankNode, DataFactory, Quad } from "n3";
 import { Writable } from "stream";
 import { pipeline } from "node:stream/promises";
+import namedNode = DataFactory.namedNode;
+import blankNode = DataFactory.blankNode;
+import quad = DataFactory.quad;
+import variable = DataFactory.variable;
+import literal = DataFactory.literal;
 
 export function generateUploadData(
   httpVerb: HttpVerb,
@@ -92,8 +97,8 @@ export async function generateN3PatchData(
   ];
   console.log(`Chose random subject ${randomSubject}`);
 
-  let oldValue = "unknown";
-  const otherQuadInfo: string[][] = [];
+  let oldValue: N3.Quad_Object | undefined = undefined;
+  const otherQuadInfo: [N3.Quad_Predicate, N3.Quad_Object][] = [];
   {
     const inputStream = fs.createReadStream(n3PatchGenFilename);
     const parserStream = new N3.StreamParser();
@@ -104,13 +109,13 @@ export async function generateN3PatchData(
         quad.subject.value === randomSubject &&
         quad.predicate.id == namePred.id
       ) {
-        oldValue = quad.object.value;
+        oldValue = quad.object;
       }
       if (
         quad.subject.value === randomSubject &&
         quad.predicate.id != namePred.id
       ) {
-        otherQuadInfo.push([quad.predicate.value, quad.object.value]);
+        otherQuadInfo.push([quad.predicate, quad.object]);
       }
       done();
     };
@@ -142,18 +147,57 @@ export async function generateN3PatchData(
   console.log(`matchingOtherProp`, matchingOtherProp);
   console.log(`matchingOtherObject`, matchingOtherObject);
 
-  const n3Patch = `@prefix solid: <http://www.w3.org/ns/solid/terms#>.
-@prefix prop: <http://nl.dbpedia.org/property#>.
+  const writer = new N3.Writer({
+    prefixes: {
+      solid: "http://www.w3.org/ns/solid/terms#",
+      wikiprop: "http://nl.dbpedia.org/property/",
+    },
+    format: "text/n3",
+  });
+  writer.addQuad(
+    blankNode("rename"),
+    namedNode("a"),
+    namedNode("http://www.w3.org/ns/solid/terms#InsertDeletePatch")
+  );
+  writer.addQuad(
+    blankNode("rename"),
+    namedNode("http://www.w3.org/ns/solid/terms#where"),
+    quad(variable("infobox"), matchingOtherProp, matchingOtherObject)
+  );
+  writer.addQuad(
+    blankNode("rename"),
+    namedNode("http://www.w3.org/ns/solid/terms#inserts"),
+    quad(
+      variable("infobox"),
+      namedNode("http://nl.dbpedia.org/property/name"),
+      literal(newValue)
+    )
+  );
+  writer.addQuad(
+    blankNode("rename"),
+    namedNode("http://www.w3.org/ns/solid/terms#deletes"),
+    quad(
+      variable("infobox"),
+      namedNode("http://nl.dbpedia.org/property/name"),
+      oldValue!
+    )
+  );
+  let res: string | undefined;
+  writer.end((error, result) => {
+    res = result;
+  });
 
-_:rename a solid:InsertDeletePatch;
-  solid:where   { ?infobox <${matchingOtherProp}> "${matchingOtherObject}". };
-  solid:inserts { ?infobox prop:name "${newValue}". };
-  solid:deletes { ?infobox prop:name "${oldValue}". }.
-`;
+  // @prefix solid: <http://www.w3.org/ns/solid/terms#>.
+  // @prefix prop: <http://nl.dbpedia.org/property#>.
+  //
+  // _:rename a solid:InsertDeletePatch;
+  //   solid:where   { ?infobox prop:something "MATCHING_OTHERPROP_VALUE". };
+  //   solid:inserts { ?infobox prop:name newValue. };
+  //   solid:deletes { ?infobox prop:name oldValue. }.
 
-  console.log(`n3Patch`, n3Patch);
+  console.log(`n3Patch`, res);
 
-  return new Uint8Array(Buffer.from(n3Patch, "base64"));
+  return new Uint8Array(Buffer.from(res!, "utf8"));
 }
 
 export interface StatusNumberInfo {
