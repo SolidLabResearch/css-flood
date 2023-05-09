@@ -892,12 +892,15 @@ export async function stepFlood(
   allFetchStartEnd: { start: number | null; end: number | null },
   processIndex: number
 ) {
-  const n3PatchStorage = await prepareN3PatchGenerator(
-    cli.n3PatchGenFilename!,
-    processIndex,
-    cli.processCount,
-    cli.parallel
-  );
+  const n3PatchStorage =
+    cli.scenario == "N3_PATCH"
+      ? await prepareN3PatchGenerator(
+          cli.n3PatchGenFilename!,
+          processIndex,
+          cli.processCount,
+          cli.parallel
+        )
+      : undefined;
   const uploadData:
     | ((userId: number, requestId: number) => Promise<ArrayBuffer>)
     | undefined =
@@ -908,7 +911,7 @@ export async function stepFlood(
             userId,
             cli.parallel,
             requestId,
-            n3PatchStorage
+            n3PatchStorage!
           )
       : cli.mustUpload
       ? async (userId: number, requestId: number) =>
