@@ -28,7 +28,7 @@ import {
 } from "./css-flood-args.js";
 import { pid } from "node:process";
 import { RDFContentTypeMap, RDFExtMap, RDFTypeValues } from "./rdf-helpers.js";
-import N3, { BlankNode, DataFactory, Quad } from "n3";
+import N3, { BlankNode, DataFactory, NamedNode, Quad } from "n3";
 import { Writable } from "stream";
 import { pipeline } from "node:stream/promises";
 import namedNode = DataFactory.namedNode;
@@ -36,6 +36,7 @@ import blankNode = DataFactory.blankNode;
 import quad = DataFactory.quad;
 import variable = DataFactory.variable;
 import literal = DataFactory.literal;
+import * as RDF from "rdf-js";
 
 export function generateUploadData(
   httpVerb: HttpVerb,
@@ -54,174 +55,6 @@ export function generateUploadData(
     `Generating random data for upload took ${durationMs}ms (for ${uploadSizeByte} bytes)`
   );
   return res;
-}
-
-export async function generateN3PatchData(
-  n3PatchGenFilename: string
-): Promise<ArrayBuffer> {
-  const subjectsWithName: Set<string> = new Set();
-
-  const namePred = namedNode("http://nl.dbpedia.org/property/naam");
-  console.log("Looking for ", namePred);
-
-  {
-    const inputStream = fs.createReadStream(n3PatchGenFilename);
-    const parserStream = new N3.StreamParser();
-    inputStream.pipe(parserStream);
-    const processor = new Writable({ objectMode: true });
-    processor._write = (quad: Quad, encoding, done) => {
-      if (quad.predicate.id == namePred.id) {
-        subjectsWithName.add(quad.subject.value);
-      }
-      done();
-    };
-    parserStream.on("end", () => {
-      console.log(`Parse end`);
-    });
-    parserStream.on("error", (error) => {
-      console.log(`Parse problem`, error);
-    });
-    // parserStream.pipe(processor);
-    await pipeline(parserStream, processor);
-  }
-
-  console.log(`Got ${subjectsWithName.size} subjects with a name`);
-  if (subjectsWithName.size === 0) {
-    throw new Error(`No expected RDF data read from ${n3PatchGenFilename}`);
-  }
-
-  const randomSubject = [...subjectsWithName][
-    Math.floor(Math.random() * (subjectsWithName.size - 1))
-  ];
-  console.log(`Chose random subject ${randomSubject}`);
-
-  let oldValue: N3.Quad_Object | undefined = undefined;
-  const otherQuadInfo: [N3.Quad_Predicate, N3.Quad_Object][] = [];
-  {
-    const inputStream = fs.createReadStream(n3PatchGenFilename);
-    const parserStream = new N3.StreamParser();
-    inputStream.pipe(parserStream);
-    const processor = new Writable({ objectMode: true });
-    processor._write = (quad: Quad, encoding, done) => {
-      if (
-        quad.subject.value === randomSubject &&
-        quad.predicate.id == namePred.id
-      ) {
-        oldValue = quad.object;
-      }
-      if (
-        quad.subject.value === randomSubject &&
-        quad.predicate.id != namePred.id
-      ) {
-        otherQuadInfo.push([quad.predicate, quad.object]);
-      }
-      done();
-    };
-    parserStream.on("end", () => {
-      console.log(`Parse end`);
-    });
-    parserStream.on("error", (error) => {
-      console.log(`Parse problem`, error);
-    });
-    // parserStream.pipe(processor);
-    await pipeline(parserStream, processor);
-  }
-
-  console.log(`Got ${otherQuadInfo.length} otherQuadInfo`);
-  if (otherQuadInfo.length === 0) {
-    throw new Error(`otherQuadInfo.length === 0`);
-  }
-
-  const i = Math.floor(Math.random() * (otherQuadInfo.length - 1));
-  let matchingOtherProp = otherQuadInfo[i][0];
-  let matchingOtherObject = otherQuadInfo[i][1];
-
-  let newValue = `Some Random Value ${Math.floor(
-    Math.random() * 1000.0
-  )} ${Math.floor(Math.random() * 1000.0)}`;
-
-  console.log(`oldValue`, oldValue);
-  console.log(`newValue`, newValue);
-  console.log(`matchingOtherProp`, matchingOtherProp);
-  console.log(`matchingOtherObject`, matchingOtherObject);
-
-  const quadToStr = (aQuad: N3.Quad): string => {
-    const writer = new N3.Writer({
-      format: "text/n3",
-    });
-    writer.addQuad(aQuad);
-    let res: string | undefined;
-    writer.end((error, result) => {
-      res = result;
-    });
-    return res!.trim();
-  };
-
-  // const writer = new N3.Writer({
-  //   prefixes: {
-  //     solid: "http://www.w3.org/ns/solid/terms#",
-  //     wikiprop: "http://nl.dbpedia.org/property/",
-  //   },
-  //   format: "text/n3",
-  // });
-  // writer.addQuad(
-  //   blankNode("rename"),
-  //   namedNode("a"),
-  //   namedNode("http://www.w3.org/ns/solid/terms#InsertDeletePatch")
-  // );
-  // writer.addQuad(
-  //   blankNode("rename"),
-  //   namedNode("http://www.w3.org/ns/solid/terms#where"),
-  //   quad(variable("infobox"), matchingOtherProp, matchingOtherObject)
-  // );
-  // writer.addQuad(
-  //   blankNode("rename"),
-  //   namedNode("http://www.w3.org/ns/solid/terms#inserts"),
-  //   quad(
-  //     variable("infobox"),
-  //     namedNode("http://nl.dbpedia.org/property/name"),
-  //     literal(newValue)
-  //   )
-  // );
-  // writer.addQuad(
-  //   blankNode("rename"),
-  //   namedNode("http://www.w3.org/ns/solid/terms#deletes"),
-  //   quad(
-  //     variable("infobox"),
-  //     namedNode("http://nl.dbpedia.org/property/name"),
-  //     oldValue!
-  //   )
-  // );
-  // let res: string | undefined;
-  // writer.end((error, result) => {
-  //   res = result;
-  // });
-
-  // @prefix solid: <http://www.w3.org/ns/solid/terms#>.
-  // @prefix prop: <http://nl.dbpedia.org/property#>.
-  //
-  // _:rename a solid:InsertDeletePatch;
-  //   solid:where   { ?infobox prop:something "MATCHING_OTHERPROP_VALUE". };
-  //   solid:inserts { ?infobox prop:name newValue. };
-  //   solid:deletes { ?infobox prop:name oldValue. }.
-
-  const res = `@prefix solid: <http://www.w3.org/ns/solid/terms#>.
-@prefix prop: <http://nl.dbpedia.org/property#>.
-
-_:rename a solid:InsertDeletePatch;
-  solid:where   { ${quadToStr(
-    quad(variable("infobox"), matchingOtherProp, matchingOtherObject)
-  )} };
-  solid:inserts { ${quadToStr(
-    quad(variable("infobox"), namePred, literal(newValue))
-  )} };
-  solid:deletes { ${quadToStr(
-    quad(variable("infobox"), namePred, oldValue!)
-  )} }.`;
-
-  console.log(`n3Patch`, res);
-
-  return new Uint8Array(Buffer.from(res!, "utf8"));
 }
 
 export interface StatusNumberInfo {
@@ -302,7 +135,7 @@ export async function fetchPodFile(
   fetchIndex: number,
   cssBaseUrl: string,
   mustUpload: boolean,
-  uploadData?: ArrayBuffer
+  uploadData?: Promise<ArrayBuffer>
 ) {
   try {
     const account = `user${userIndex}`;
@@ -325,7 +158,7 @@ export async function fetchPodFile(
           options.headers = {
             "Content-type": "application/octet-stream",
           };
-          options.body = uploadData;
+          options.body = await uploadData;
         }
 
         if (filenameIndexing) {
@@ -341,7 +174,7 @@ export async function fetchPodFile(
         options.headers = {
           "Content-type": "text/n3",
         };
-        options.body = uploadData;
+        options.body = await uploadData;
 
         podFileRelative = `rdf_example_N_TRIPLES.nt`;
         break;
@@ -424,7 +257,8 @@ export async function fetchPodFile(
     const res: AnyFetchResponseType = await aFetch(url, options);
     counter.statuses[res.status] = (counter.statuses[res.status] || 0) + 1;
 
-    if (!res.ok) {
+    //For the N3 PATCH scenario, we consider 409 success as well.
+    if (!res.ok && (scenario != "N3_PATCH" || res.status != 409)) {
       const bodyError = await res.text();
       const errorMessage =
         `${res.status} - ${httpVerb} with account ${account}, pod path "${podFileRelative}" failed` +
@@ -829,17 +663,256 @@ export async function stepLoadAuthCache(
   );
 }
 
+interface N3PatchGeneratorTargetQuad {
+  changePredicate: N3.Quad_Predicate;
+  // changePredicate: NamedNode;
+  changeOldValue: N3.Quad_Object;
+  matchPredicate: N3.Quad_Predicate;
+  matchObject: N3.Quad_Object;
+}
+
+interface N3PatchGeneratorState {
+  next: number;
+  targets: N3PatchGeneratorTargetQuad[];
+}
+
+async function prepareN3PatchGenerator(
+  n3PatchGenFilename: string,
+  processIndex: number,
+  processCount: number,
+  maxAsyncRequests: number
+): Promise<N3PatchGeneratorState> {
+  const subjects: Set<N3.Quad_Subject> = new Set();
+
+  const predObjCounts: Map<string, number> = new Map();
+
+  // const namePred = namedNode("http://nl.dbpedia.org/property/naam");
+  // console.log("Looking for ", namePred);
+
+  const predObjKeyMaker = (v: [N3.Quad_Predicate, N3.Quad_Object]) =>
+    JSON.stringify(v);
+
+  {
+    const inputStream = fs.createReadStream(n3PatchGenFilename);
+    const parserStream = new N3.StreamParser();
+    inputStream.pipe(parserStream);
+    const processor = new Writable({ objectMode: true });
+    processor._write = (quad: Quad, encoding, done) => {
+      subjects.add(quad.subject);
+      const c = predObjCounts.get(
+        predObjKeyMaker([quad.predicate, quad.object])
+      );
+      predObjCounts.set(
+        predObjKeyMaker([quad.predicate, quad.object]),
+        typeof c === "number" ? c + 1 : 1
+      );
+      done();
+    };
+    // parserStream.on("end", () => {
+    //   console.log(`Parse end`);
+    // });
+    parserStream.on("error", (error) => {
+      console.log(`Parse problem`, error);
+    });
+    // parserStream.pipe(processor);
+    await pipeline(parserStream, processor);
+  }
+
+  // console.log(`Got ${subjectsWithName.size} subjects with a name`);
+  if (subjects.size === 0) {
+    throw new Error(`No expected RDF data read from ${n3PatchGenFilename}`);
+  }
+  if ([...predObjCounts.values()].filter((v) => v > 1).length === 0) {
+    throw new Error(
+      `There are no unique props/objs for any subject. That can't be right.`
+    );
+  }
+
+  interface TargetInfo {
+    match: [N3.Quad_Predicate, N3.Quad_Object] | undefined;
+    others: [N3.Quad_Predicate, N3.Quad_Object][];
+  }
+  const targetInfoBySubject: Map<string, TargetInfo> = new Map();
+
+  const subjKeyMaker = (v: N3.Quad_Subject) => JSON.stringify(v);
+
+  {
+    const inputStream = fs.createReadStream(n3PatchGenFilename);
+    const parserStream = new N3.StreamParser();
+    inputStream.pipe(parserStream);
+    const processor = new Writable({ objectMode: true });
+    processor._write = (quad: Quad, encoding, done) => {
+      const targetInfo: TargetInfo = targetInfoBySubject.get(
+        subjKeyMaker(quad.subject)
+      ) || {
+        match: undefined,
+        others: [],
+      };
+      if (targetInfo.match === undefined && targetInfo.others.length === 0) {
+        targetInfoBySubject.set(subjKeyMaker(quad.subject), targetInfo);
+      }
+      if (
+        predObjCounts.get(predObjKeyMaker([quad.predicate, quad.object])) ===
+          1 &&
+        targetInfo.match === undefined
+      ) {
+        targetInfo.match = [quad.predicate, quad.object];
+      } else {
+        targetInfo.others.push([quad.predicate, quad.object]);
+      }
+      done();
+    };
+    // parserStream.on("end", () => {
+    //   console.log(`Parse end`);
+    // });
+    parserStream.on("error", (error) => {
+      console.log(`Parse problem`, error);
+    });
+    await pipeline(parserStream, processor);
+  }
+
+  if (targetInfoBySubject.size === 0) {
+    throw new Error(`targetInfoBySubject.size === 0`);
+  }
+
+  const targets: N3PatchGeneratorTargetQuad[] = [];
+  for (const [subjectValue, target_info] of targetInfoBySubject.entries()) {
+    if (target_info.match !== undefined && target_info.others.length > 0) {
+      for (const other of target_info.others) {
+        targets.push({
+          changePredicate: other[0],
+          changeOldValue: other[1],
+          matchPredicate: target_info.match[0],
+          matchObject: target_info.match[1],
+        });
+      }
+    } else {
+      console.log(`No targets for subject ${subjectValue}!`, target_info);
+    }
+  }
+
+  //Take a subset of targets for this process, taking processIndex and processCount into account.
+  const pRemainder = targets.length % processCount;
+  const pQuotient = (targets.length - pRemainder) / processCount;
+  //we ignore the remainder to make things easy. There should be enough anyway. And if not the remainder can't make the difference anyway.
+  const myTargetStartIndexIncl = pQuotient * processIndex;
+  const myTargetEndIndexExcl = pQuotient * (processIndex + 1);
+  const myTargets = targets.slice(myTargetStartIndexIncl, myTargetEndIndexExcl);
+
+  //Check if there are enough in this subset to satisfy maxAsyncRequests
+  if (pQuotient < maxAsyncRequests) {
+    throw new Error(
+      `Each process has ${pQuotient} targets, but ${maxAsyncRequests} are needed.`
+    );
+  }
+  console.log(
+    `Each process has ${pQuotient} targets (of ${targets.length}) (need at least ${maxAsyncRequests}).`
+  );
+  console.log(
+    `Process ${processIndex}/${processCount} has ${myTargets.length} targets (indices [${myTargetStartIndexIncl}, ${myTargetEndIndexExcl}[)`
+  );
+
+  return {
+    next: 0,
+    targets: myTargets,
+  };
+}
+
+async function generateNonConflictingN3PatchData(
+  processIndex: number,
+  userId: number,
+  maxAsyncRequests: number,
+  requestId: number,
+  storage: N3PatchGeneratorState
+): Promise<ArrayBuffer> {
+  const index = storage.next;
+  storage.next = storage.next + 1;
+  if (storage.next >= storage.targets.length) {
+    storage.next = 0;
+  }
+  console.assert(maxAsyncRequests <= storage.targets.length);
+
+  const target = storage.targets[index];
+
+  const quadToStr = (
+    subject: RDF.Quad_Subject,
+    predicate: RDF.Quad_Predicate,
+    object: RDF.Quad_Object
+  ): string => {
+    const writer = new N3.Writer({
+      format: "text/n3",
+    });
+    writer.addQuad(subject, predicate, object);
+    let res: string | undefined;
+    writer.end((error, result) => {
+      res = result;
+    });
+    return res!.trim();
+  };
+
+  //N3 PATCH example:
+  //
+  //   @prefix solid: <http://www.w3.org/ns/solid/terms#>.
+  //   @prefix prop: <http://nl.dbpedia.org/property/>.
+  //
+  //   _:rename a solid:InsertDeletePatch;
+  //     solid:where   { ?infobox prop:something "MATCHING_OTHERPROP_VALUE". };
+  //     solid:inserts { ?infobox prop:name newValue. };
+  //     solid:deletes { ?infobox prop:name oldValue. }.
+
+  // let newValue = `Some Random Value ${Math.floor(
+  //     Math.random() * 1000.0
+  // )} ${Math.floor(Math.random() * 1000.0)}`;
+  const newValue = `PerfTest PATCH test process=${processIndex} requestId=${requestId} userId=${userId}`;
+
+  const v = variable("infobox");
+
+  const res = `@prefix solid: <http://www.w3.org/ns/solid/terms#>.
+
+_:rename a solid:InsertDeletePatch;
+  solid:where   { ${quadToStr(v, target.matchPredicate, target.matchObject)} };
+  solid:inserts { ${quadToStr(v, target.changePredicate, literal(newValue))} };
+  solid:deletes { ${quadToStr(
+    v,
+    target.changePredicate,
+    target.changeOldValue
+  )} }.`;
+
+  // console.log(`n3Patch`, res);
+
+  target.changeOldValue = literal(newValue);
+
+  return new Uint8Array(Buffer.from(res!, "utf8"));
+}
+
 export async function stepFlood(
   authFetchCache: AuthFetchCache,
   cli: CliArgs,
   counter: Counter,
-  allFetchStartEnd: { start: number | null; end: number | null }
+  allFetchStartEnd: { start: number | null; end: number | null },
+  processIndex: number
 ) {
-  const uploadData =
+  const n3PatchStorage = await prepareN3PatchGenerator(
+    cli.n3PatchGenFilename!,
+    processIndex,
+    cli.processCount,
+    cli.parallel
+  );
+  const uploadData:
+    | ((userId: number, requestId: number) => Promise<ArrayBuffer>)
+    | undefined =
     cli.scenario == "N3_PATCH"
-      ? await generateN3PatchData(cli.n3PatchGenFilename!)
+      ? (userId: number, requestId: number) =>
+          generateNonConflictingN3PatchData(
+            processIndex,
+            userId,
+            cli.parallel,
+            requestId,
+            n3PatchStorage
+          )
       : cli.mustUpload
-      ? generateUploadData(cli.httpVerb, cli.uploadSizeByte)
+      ? async (userId: number, requestId: number) =>
+          generateUploadData(cli.httpVerb, cli.uploadSizeByte)
       : undefined;
 
   const requests = [];
@@ -859,6 +932,7 @@ export async function stepFlood(
       if (curUserId >= cli.userCount) {
         curUserId = 0;
       }
+      const fetchIndex = fetchIndexForUser[userId]++;
       return fetchPodFile(
         cli.scenario,
         userId,
@@ -868,10 +942,10 @@ export async function stepFlood(
         cli.fetchTimeoutMs,
         cli.httpVerb,
         cli.filenameIndexing,
-        fetchIndexForUser[userId]++,
+        fetchIndex,
         cli.cssBaseUrl,
         cli.mustUpload,
-        uploadData
+        uploadData ? uploadData(userId, fetchIndex) : undefined
       );
     };
     console.log(
@@ -926,7 +1000,7 @@ export async function stepFlood(
             i,
             cli.cssBaseUrl,
             cli.mustUpload,
-            uploadData
+            uploadData ? uploadData(j, i) : undefined
           )
         );
       }
@@ -1008,7 +1082,8 @@ export async function runNamedStep(
       break;
     }
     case "flood": {
-      await stepFlood(authFetchCache, cli, counter, allFetchStartEnd);
+      console.assert(cli.processCount < 2);
+      await stepFlood(authFetchCache, cli, counter, allFetchStartEnd, 0);
       break;
     }
     default: {

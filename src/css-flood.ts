@@ -83,7 +83,7 @@ async function main() {
   });
 
   if (cli.processCount == 1) {
-    await stepFlood(authFetchCache, cli, counter, allFetchStartEnd);
+    await stepFlood(authFetchCache, cli, counter, allFetchStartEnd, 0);
 
     await reportFinalStatistics(
       counter,
@@ -171,6 +171,7 @@ async function main() {
     console.log(`Workers ready. Sending config...`);
 
     //init processes
+    let processIndex = 0;
     for (const p of processes) {
       p.process.send({
         messageType: "SetCliArgs",
@@ -178,7 +179,9 @@ async function main() {
         processFetchCount: p.processFetchCount,
         parallelFetchCount: p.parallelFetchCount,
         index: p.filenameIndexingStart,
+        processIndex,
       });
+      processIndex += 1;
       p.process.send({
         messageType: "SetCache",
         authCacheContent: JSON.stringify(await authFetchCache.dump()),

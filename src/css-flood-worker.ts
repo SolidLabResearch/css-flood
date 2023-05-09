@@ -34,6 +34,7 @@ async function main() {
 
   //handle messages
   let stopped = false;
+  let processIndex: number | undefined = undefined;
   let cli: CliArgs | null = null;
   let fetcher: AnyFetchType | null = null;
   let authFetchCache: AuthFetchCache | null = null;
@@ -70,6 +71,7 @@ async function main() {
           );
           cli.filenameIndexingStart = message.index;
         }
+        processIndex = message.processIndex;
         break;
       }
       case "SetCache": {
@@ -106,8 +108,19 @@ async function main() {
             //   cli.userCount,
             //   cli.ensureAuthExpirationS
             // );
+            if (typeof processIndex !== "number") {
+              throw new Error(
+                `processIndex not set correctly: ${processIndex}`
+              );
+            }
             try {
-              await stepFlood(authFetchCache, cli, counter, allFetchStartEnd);
+              await stepFlood(
+                authFetchCache,
+                cli,
+                counter,
+                allFetchStartEnd,
+                processIndex
+              );
             } finally {
               const floodStatistics = makeStatistics(
                 counter,

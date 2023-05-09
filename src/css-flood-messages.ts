@@ -39,6 +39,7 @@ export interface SetCliArgs {
   processFetchCount: number; //cliArgs.fetchCount is fairly divided over all processes
   parallelFetchCount: number; //cliArgs.parallel is fairly divided over all processes
   index?: number; //cliArgs.filenameIndexing is divided over all processes so no duplicates are used
+  processIndex: number;
 }
 
 export interface SetCache {
