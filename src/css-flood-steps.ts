@@ -61,9 +61,7 @@ export async function generateN3PatchData(
 ): Promise<ArrayBuffer> {
   const subjectsWithName: Set<string> = new Set();
 
-  const namePred = N3.DataFactory.namedNode(
-    "http://nl.dbpedia.org/property/naam"
-  );
+  const namePred = namedNode("http://nl.dbpedia.org/property/naam");
   console.log("Looking for ", namePred);
 
   {
@@ -147,45 +145,57 @@ export async function generateN3PatchData(
   console.log(`matchingOtherProp`, matchingOtherProp);
   console.log(`matchingOtherObject`, matchingOtherObject);
 
-  const writer = new N3.Writer({
-    prefixes: {
-      solid: "http://www.w3.org/ns/solid/terms#",
-      wikiprop: "http://nl.dbpedia.org/property/",
-    },
-    format: "text/n3",
-  });
-  writer.addQuad(
-    blankNode("rename"),
-    namedNode("a"),
-    namedNode("http://www.w3.org/ns/solid/terms#InsertDeletePatch")
-  );
-  writer.addQuad(
-    blankNode("rename"),
-    namedNode("http://www.w3.org/ns/solid/terms#where"),
-    quad(variable("infobox"), matchingOtherProp, matchingOtherObject)
-  );
-  writer.addQuad(
-    blankNode("rename"),
-    namedNode("http://www.w3.org/ns/solid/terms#inserts"),
-    quad(
-      variable("infobox"),
-      namedNode("http://nl.dbpedia.org/property/name"),
-      literal(newValue)
-    )
-  );
-  writer.addQuad(
-    blankNode("rename"),
-    namedNode("http://www.w3.org/ns/solid/terms#deletes"),
-    quad(
-      variable("infobox"),
-      namedNode("http://nl.dbpedia.org/property/name"),
-      oldValue!
-    )
-  );
-  let res: string | undefined;
-  writer.end((error, result) => {
-    res = result;
-  });
+  const quadToStr = (aQuad: N3.Quad): string => {
+    const writer = new N3.Writer({
+      format: "text/n3",
+    });
+    writer.addQuad(aQuad);
+    let res: string | undefined;
+    writer.end((error, result) => {
+      res = result;
+    });
+    return res!.trim();
+  };
+
+  // const writer = new N3.Writer({
+  //   prefixes: {
+  //     solid: "http://www.w3.org/ns/solid/terms#",
+  //     wikiprop: "http://nl.dbpedia.org/property/",
+  //   },
+  //   format: "text/n3",
+  // });
+  // writer.addQuad(
+  //   blankNode("rename"),
+  //   namedNode("a"),
+  //   namedNode("http://www.w3.org/ns/solid/terms#InsertDeletePatch")
+  // );
+  // writer.addQuad(
+  //   blankNode("rename"),
+  //   namedNode("http://www.w3.org/ns/solid/terms#where"),
+  //   quad(variable("infobox"), matchingOtherProp, matchingOtherObject)
+  // );
+  // writer.addQuad(
+  //   blankNode("rename"),
+  //   namedNode("http://www.w3.org/ns/solid/terms#inserts"),
+  //   quad(
+  //     variable("infobox"),
+  //     namedNode("http://nl.dbpedia.org/property/name"),
+  //     literal(newValue)
+  //   )
+  // );
+  // writer.addQuad(
+  //   blankNode("rename"),
+  //   namedNode("http://www.w3.org/ns/solid/terms#deletes"),
+  //   quad(
+  //     variable("infobox"),
+  //     namedNode("http://nl.dbpedia.org/property/name"),
+  //     oldValue!
+  //   )
+  // );
+  // let res: string | undefined;
+  // writer.end((error, result) => {
+  //   res = result;
+  // });
 
   // @prefix solid: <http://www.w3.org/ns/solid/terms#>.
   // @prefix prop: <http://nl.dbpedia.org/property#>.
@@ -194,6 +204,20 @@ export async function generateN3PatchData(
   //   solid:where   { ?infobox prop:something "MATCHING_OTHERPROP_VALUE". };
   //   solid:inserts { ?infobox prop:name newValue. };
   //   solid:deletes { ?infobox prop:name oldValue. }.
+
+  const res = `@prefix solid: <http://www.w3.org/ns/solid/terms#>.
+@prefix prop: <http://nl.dbpedia.org/property#>.
+
+_:rename a solid:InsertDeletePatch;
+  solid:where   { ${quadToStr(
+    quad(variable("infobox"), matchingOtherProp, matchingOtherObject)
+  )} };
+  solid:inserts { ${quadToStr(
+    quad(variable("infobox"), namePred, literal(newValue))
+  )} };
+  solid:deletes { ${quadToStr(
+    quad(variable("infobox"), namePred, oldValue!)
+  )} }.`;
 
   console.log(`n3Patch`, res);
 
