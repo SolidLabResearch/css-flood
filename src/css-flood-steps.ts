@@ -787,7 +787,17 @@ async function prepareN3PatchGenerator(
         });
       }
     } else {
-      console.log(`No targets for subject ${subjectValue}!`, target_info);
+      if (target_info.match === undefined) {
+        //not worth mentioning, it happens.
+        // console.log(
+        //   `No targets for subject ${subjectValue}, because no unique match`
+        // );
+      } else {
+        //not worth mentioning, it happens.
+        // console.log(
+        //   `No targets for subject ${subjectValue} because no other triples than match.`
+        // );
+      }
     }
   }
 
