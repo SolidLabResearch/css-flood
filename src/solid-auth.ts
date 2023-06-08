@@ -83,7 +83,7 @@ export function stillUsableAccessToken(
   return expire > now && expire - now > deadline_s * 1000;
 }
 
-export async function getUserAuthFetch(
+async function getUsableAccessToken(
   cssBaseUrl: string,
   account: string,
   token: UserToken,
@@ -93,7 +93,7 @@ export async function getUserAuthFetch(
   generateDpopKeyPairDurationCounter: DurationCounter | null = null,
   accessToken: AccessToken | null = null,
   ensureAuthExpirationS: number = 30
-): Promise<[AnyFetchType, AccessToken]> {
+): Promise<AccessToken> {
   //see https://github.com/CommunitySolidServer/CommunitySolidServer/blob/main/documentation/markdown/usage/client-credentials.md
   const { id, secret } = token;
 
@@ -171,6 +171,7 @@ export async function getUserAuthFetch(
         throw new Error(msg);
       }
     }
+    return accessToken;
   } catch (error: any) {
     if (error.name === "AbortError") {
       console.error(`Fetching access token took too long: aborted`);
@@ -186,6 +187,30 @@ export async function getUserAuthFetch(
       );
     }
   }
+}
+
+export async function getUserAuthFetch(
+  cssBaseUrl: string,
+  account: string,
+  token: UserToken,
+  fetcher: AnyFetchType = fetch,
+  accessTokenDurationCounter: DurationCounter | null = null,
+  fetchDurationCounter: DurationCounter | null = null,
+  generateDpopKeyPairDurationCounter: DurationCounter | null = null,
+  accessToken: AccessToken | null = null,
+  ensureAuthExpirationS: number = 30
+): Promise<[AnyFetchType, AccessToken]> {
+  accessToken = await getUsableAccessToken(
+    cssBaseUrl,
+    account,
+    token,
+    fetcher,
+    accessTokenDurationCounter,
+    fetchDurationCounter,
+    generateDpopKeyPairDurationCounter,
+    accessToken,
+    ensureAuthExpirationS
+  );
 
   const fetchDurationStart = new Date().getTime();
   try {
@@ -210,4 +235,46 @@ export async function getUserAuthFetch(
       );
     }
   }
+}
+
+export interface AuthHeaders {
+  Authorization: string;
+  DPoP: string;
+}
+
+export async function getFetchAuthHeaders(
+  cssBaseUrl: string,
+  account: string,
+  method: "get" | "put" | "post" | "patch" | "delete",
+  token: UserToken,
+  fetcher: AnyFetchType = fetch,
+  accessTokenDurationCounter: DurationCounter | null = null,
+  fetchDurationCounter: DurationCounter | null = null,
+  generateDpopKeyPairDurationCounter: DurationCounter | null = null,
+  accessToken: AccessToken | null = null,
+  ensureAuthExpirationS: number = 30
+): Promise<[AuthHeaders, AccessToken]> {
+  accessToken = await getUsableAccessToken(
+    cssBaseUrl,
+    account,
+    token,
+    fetcher,
+    accessTokenDurationCounter,
+    fetchDurationCounter,
+    generateDpopKeyPairDurationCounter,
+    accessToken,
+    ensureAuthExpirationS
+  );
+  const dpop = await createDpopHeader(
+    cssBaseUrl,
+    method,
+    accessToken.dpopKeyPair
+  );
+  return [
+    {
+      Authorization: `DPoP ${accessToken.token}`,
+      DPoP: dpop,
+    },
+    accessToken,
+  ];
 }

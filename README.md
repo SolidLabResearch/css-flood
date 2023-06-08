@@ -104,6 +104,7 @@ The steps that can run are (always in this order):
 - testRequests: Do 1 request (typically a GET to download a file) for each users (back-to-back, not in parallel).
                 This tests both the data in the authentication cache (adding missing entries), and the actual request.
 - saveAC: Save the authentication cache to file.
+- saveAuthHeaders: Save the authentication cache to file, as CSV with HTTP Headers.
 - flood: Run the actual "flood": generate load on the target CSS by running a number of requests in parallel.
 
 Examples:

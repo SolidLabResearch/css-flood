@@ -10,6 +10,7 @@ export type StepName =
   | "testRequest"
   | "testRequests"
   | "saveAC"
+  | "saveAuthHeaders"
   | "flood";
 
 const ALLOWED_STEPS: StepName[] = [
@@ -19,6 +20,7 @@ const ALLOWED_STEPS: StepName[] = [
   "testRequest",
   "testRequests",
   "saveAC",
+  "saveAuthHeaders",
   "flood",
 ];
 
@@ -167,6 +169,12 @@ let ya = yargs(hideBin(process.argv))
     type: "string",
     description: "File to load/save the authentication cache from/to",
   })
+  .option("csvFile", {
+    group: "Fetch Authentication:",
+    type: "string",
+    description:
+      "CSV File to save the authentication cache to, in the form or HTTP headers",
+  })
   .option("ensureAuthExpiration", {
     group: "Fetch Authentication:",
     type: "number",
@@ -212,6 +220,7 @@ The steps that can run are (always in this order):
 - testRequests: Do 1 request (typically a GET to download a file) for each users (back-to-back, not in parallel). 
                 This tests both the data in the authentication cache (adding missing entries), and the actual request.
 - saveAC: Save the authentication cache to file.
+- saveAuthHeaders: Save the authentication cache to file, as CSV with HTTP headers.
 - flood: Run the actual "flood": generate load on the target CSS by running a number of requests in parallel.
 
 Examples:
@@ -281,6 +290,7 @@ export interface CliArgs {
   authenticate: boolean;
   useNodeFetch: boolean;
   authCacheFile?: string;
+  csvFile?: string;
   reportFile?: string;
   ensureAuthExpirationS: number;
   steps: StepName[];
@@ -318,6 +328,7 @@ export function getCliArgs(): CliArgs {
     authenticate: argv.authenticate || false,
     useNodeFetch: argv.fetchVersion == "node" || false,
     authCacheFile: argv.authCacheFile || undefined,
+    csvFile: argv.csvFile || undefined,
     reportFile: argv.reportFile || undefined,
     ensureAuthExpirationS: argv.ensureAuthExpiration || 90,
 

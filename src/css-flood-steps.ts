@@ -1094,6 +1094,16 @@ export async function runNamedStep(
       }
       break;
     }
+    case "saveAuthHeaders": {
+      if (cli.csvFile) {
+        await authFetchCache.saveHeadersAsCsv(
+          cli.cssBaseUrl,
+          cli.podFilename,
+          cli.csvFile
+        );
+      }
+      break;
+    }
     case "flood": {
       console.assert(cli.processCount < 2);
       await stepFlood(authFetchCache, cli, counter, allFetchStartEnd, 0);

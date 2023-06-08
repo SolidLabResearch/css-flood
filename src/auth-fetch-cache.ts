@@ -1,6 +1,7 @@
 import {
   AccessToken,
   createUserToken,
+  getFetchAuthHeaders,
   getUserAuthFetch,
   stillUsableAccessToken,
   UserToken,
@@ -37,6 +38,23 @@ export interface AuthFetchCacheStats {
   useCount: number;
   tokenFetchCount: number;
   authFetchCount: number;
+}
+
+interface CacheAuthAccessToken {
+  token: string;
+  expire: number;
+  dpopKeyPair: {
+    publicKey: jose.JWK;
+    privateKeyType: string;
+    privateKey: string;
+  };
+}
+
+interface DumpType {
+  timestamp: string;
+  cssTokensByUser: Array<UserToken | null>;
+  authAccessTokenByUser: Array<CacheAuthAccessToken | null>;
+  filename?: string;
 }
 
 export class AuthFetchCache {
@@ -408,26 +426,27 @@ export class AuthFetchCache {
     return `${this.cssTokensByUser.length} userTokens and ${this.authAccessTokenByUser.length} authAccessTokens`;
   }
 
-  async dump(): Promise<any> {
-    const accessTokenForJson = await Promise.all(
-      [...this.authAccessTokenByUser].map(async (accessToken) =>
-        !accessToken
-          ? null
-          : {
-              token: accessToken.token,
-              expire: accessToken.expire.getTime(),
-              dpopKeyPair: {
-                publicKey: accessToken.dpopKeyPair.publicKey, //already a JWK
-                privateKeyType: accessToken.dpopKeyPair.privateKey.type,
-                // @ts-ignore
-                privateKey: await jose.exportPKCS8(
+  async dump(): Promise<DumpType> {
+    const accessTokenForJson: (CacheAuthAccessToken | null)[] =
+      await Promise.all(
+        [...this.authAccessTokenByUser].map(async (accessToken) =>
+          !accessToken
+            ? null
+            : {
+                token: accessToken.token,
+                expire: accessToken.expire.getTime(),
+                dpopKeyPair: {
+                  publicKey: accessToken.dpopKeyPair.publicKey, //already a JWK
+                  privateKeyType: accessToken.dpopKeyPair.privateKey.type,
                   // @ts-ignore
-                  accessToken.dpopKeyPair.privateKey
-                ),
-              },
-            }
-      )
-    );
+                  privateKey: await jose.exportPKCS8(
+                    // @ts-ignore
+                    accessToken.dpopKeyPair.privateKey
+                  ),
+                },
+              }
+        )
+      );
     return {
       timestamp: new Date().toISOString(),
       cssTokensByUser: this.cssTokensByUser,
@@ -438,6 +457,38 @@ export class AuthFetchCache {
     const cacheContent = await this.dump();
     cacheContent.filename = authCacheFile;
     await fs.writeFile(authCacheFile, JSON.stringify(cacheContent));
+  }
+  async saveHeadersAsCsv(
+    cssBaseUrl: string,
+    podFilename: string,
+    csvFile: string
+  ) {
+    const csvLines: string[] = [];
+    for (
+      let userIndex = 0;
+      userIndex < this.cssTokensByUser.length;
+      userIndex++
+    ) {
+      const account = `user${userIndex}`;
+      const resourceUrl = `${cssBaseUrl}${account}/${podFilename}`;
+
+      const [authHeaders, accessToken] = await getFetchAuthHeaders(
+        resourceUrl,
+        `user${userIndex}`,
+        "get",
+        this.cssTokensByUser[userIndex]!,
+        fetch,
+        null,
+        null,
+        null,
+        this.authAccessTokenByUser[userIndex],
+        3600
+      );
+      csvLines.push(
+        `${userIndex},${resourceUrl},${authHeaders["Authorization"]},${authHeaders["DPoP"]}`
+      );
+    }
+    await fs.writeFile(csvFile, csvLines.join("\n"));
   }
 
   async load(authCacheFile: string) {
