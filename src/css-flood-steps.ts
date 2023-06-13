@@ -51,9 +51,9 @@ export function generateUploadData(
   // }
 
   const durationMs = new Date().getTime() - startTime;
-  console.debug(
-    `Generating random data for upload took ${durationMs}ms (for ${uploadSizeByte} bytes)`
-  );
+  // console.debug(
+  //   `Generating random data for upload took ${durationMs}ms (for ${uploadSizeByte} bytes)`
+  // );
   return res;
 }
 
@@ -961,8 +961,8 @@ export async function stepFlood(
         uploadData ? uploadData(userId, fetchIndex) : undefined
       );
     };
-    console.log(
-      `Fetching files from ${cli.userCount} users. Max ${cli.parallel} parallel requests. Will stop after ${cli.durationS} seconds...`
+    console.debug(
+      `Worker ${process.pid}: Fetching files from ${cli.userCount} users. Max ${cli.parallel} parallel requests. Will stop after ${cli.durationS} seconds...`
     );
     allFetchStartEnd.start = Date.now();
     for (let p = 0; p < cli.parallel; p++) {
@@ -985,7 +985,7 @@ export async function stepFlood(
     await Promise.allSettled(promises);
     allFetchStartEnd.end = Date.now();
     const runMillis = allFetchStartEnd.end - allFetchStartEnd.start;
-    console.log(`All fetches completed after ${runMillis / 1000.0} seconds.`);
+    console.debug(`All fetches completed after ${runMillis / 1000.0} seconds.`);
     if (runMillis < durationMillis) {
       console.error(
         `ERROR: Fetches completed too early!\n    runtime=${runMillis} ms\n    requested duration=${cli.durationS} s (=${durationMillis} ms)\n`

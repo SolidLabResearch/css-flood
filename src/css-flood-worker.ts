@@ -46,29 +46,29 @@ async function main() {
 
   while (!stopped) {
     const { message } = await msgCheat.waitForMessage();
-    console.log(
-      `Worker ${process.pid} got message of type '${message.messageType}'`
-    );
+    // console.debug(
+    //   `Worker ${process.pid} got message of type '${message.messageType}'`
+    // );
     switch (message.messageType) {
       case "SetCliArgs": {
         cli = message.cliArgs;
         fetcher = cli.useNodeFetch ? nodeFetch : es6fetch;
         //override fetchCount with the part of the fetchCount for this process
-        console.log(
-          `Overriding for process ${process.pid}: ` +
-            `fetchCount=${message.processFetchCount} instead of ${cli.fetchCount}`
-        );
-        console.log(
-          `Overriding for process ${process.pid}: ` +
-            `  parallel=${message.parallelFetchCount} instead of ${cli.parallel}`
-        );
+        // console.debug(
+        //   `Overriding for process ${process.pid}: ` +
+        //     `fetchCount=${message.processFetchCount} instead of ${cli.fetchCount}`
+        // );
+        // console.debug(
+        //   `Overriding for process ${process.pid}: ` +
+        //     `  parallel=${message.parallelFetchCount} instead of ${cli.parallel}`
+        // );
         cli.fetchCount = message.processFetchCount;
         cli.parallel = message.parallelFetchCount;
         if (typeof message.index === "number") {
-          console.log(
-            `Overriding for process ${process.pid}: ` +
-              `  filenameIndexingStart=${message.index} instead of ${cli.filenameIndexingStart}`
-          );
+          // console.debug(
+          //   `Overriding for process ${process.pid}: ` +
+          //     `  filenameIndexingStart=${message.index} instead of ${cli.filenameIndexingStart}`
+          // );
           cli.filenameIndexingStart = message.index;
         }
         processIndex = message.processIndex;
@@ -113,6 +113,7 @@ async function main() {
                 `processIndex not set correctly: ${processIndex}`
               );
             }
+            // console.debug(`Worker ${process.pid}: flood start`);
             try {
               await stepFlood(
                 authFetchCache,
