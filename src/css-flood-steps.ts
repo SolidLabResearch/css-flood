@@ -41,7 +41,7 @@ import {
   stepNotificationsConnectWebsockets,
   stepNotificationsDelete,
   stepNotificationsSubscribe,
-} from "./notification-steps";
+} from "./notification-steps.js";
 
 export function generateUploadData(
   httpVerb: HttpVerb,

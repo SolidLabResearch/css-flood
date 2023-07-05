@@ -33,6 +33,13 @@ const ALLOWED_STEPS: StepName[] = [
 let ya = yargs(hideBin(process.argv))
   .usage("Usage: $0 --url <url> [--steps <steps>] ...")
   //general options
+  .option("v", {
+    group: "Base:",
+    type: "count",
+    description:
+      "Verbosity. The more times this option is added, the more messages are printed.",
+    demandOption: false,
+  })
   .option("url", {
     group: "Base:",
     // alias: "u",
@@ -316,6 +323,7 @@ export type FetchScenario =
   | "NO_CONTENT_TRANSLATION";
 
 export interface CliArgs {
+  verbosity_count: number;
   userCount: number;
   fetchTimeoutMs: number;
   fetchCount: number;
@@ -342,11 +350,16 @@ export interface CliArgs {
   notificationChannelType: "websocket" | "webhook";
   notificationWebhookTarget: string;
   notificationIgnore: boolean;
+
+  v1: (message?: any, ...optionalParams: any[]) => void;
+  v2: (message?: any, ...optionalParams: any[]) => void;
+  v3: (message?: any, ...optionalParams: any[]) => void;
 }
 
 export function getCliArgs(): CliArgs {
   const httpVerb = <HttpVerb>argv.verb;
   return {
+    verbosity_count: argv.v,
     cssBaseUrl: argv.url.endsWith("/") ? argv.url : argv.url + "/",
     podFilename: argv.filename,
     filenameIndexing: argv.filenameIndexing,
@@ -380,5 +393,15 @@ export function getCliArgs(): CliArgs {
     ),
     notificationWebhookTarget: argv.notificationWebhookTarget,
     notificationIgnore: argv.notificationIgnore,
+
+    v3: (message?: any, ...optionalParams: any[]) => {
+      if (argv.v >= 3) console.log(message, ...optionalParams);
+    },
+    v2: (message?: any, ...optionalParams: any[]) => {
+      if (argv.v >= 2) console.log(message, ...optionalParams);
+    },
+    v1: (message?: any, ...optionalParams: any[]) => {
+      if (argv.v >= 1) console.log(message, ...optionalParams);
+    },
   };
 }

@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 
-import { AuthFetchCache, fromNow } from "./auth-fetch-cache.js";
-import { CliArgs } from "./css-flood-args.js";
-import { Counter, discardBodyData } from "./css-flood-steps";
-import { RDFContentTypeMap, RDFExtMap, RDFTypeValues } from "./rdf-helpers";
-import { AnyFetchResponseType } from "./generic-fetch";
+import { AuthFetchCache } from "./auth-fetch-cache.js";
+import { CliArgs, HttpVerb } from "./css-flood-args.js";
+import { Counter, fetchPodFile } from "./css-flood-steps.js";
+import { AnyFetchResponseType } from "./generic-fetch.js";
 
 //spec: https://solidproject.org/TR/2022/notifications-protocol-20221231
 //see also: https://communitysolidserver.github.io/CommunitySolidServer/6.x/usage/notifications/
@@ -98,12 +97,20 @@ export async function stepNotificationsSubscribe(
       options.body = notificationRequest;
       const res: AnyFetchResponseType = await aFetch(url, options);
 
+      cli.v2(
+        `Notification subscribe reply code: ${res.status} ${res.statusText}`
+      );
+
       if (!res.ok) {
         const bodyError = await res.text();
         const errorMessage =
           `${res.status} - Notification subscribe with account ${account}, ` +
           `target ${notificationRequest.topic} URL "${url}" failed: ${bodyError}`;
         console.error(errorMessage);
+        cli.v2(
+          `Notification subscribe error. Request Body: `,
+          notificationRequest
+        );
         return;
       } else {
         const apiReply: NotificationsApiReply = <NotificationsApiReply>(
@@ -118,8 +125,10 @@ export async function stepNotificationsSubscribe(
           sendTo: apiReply.sendTo,
         };
         notificationSubscriptions.push(subscription);
+        cli.v1(`Subscribed to a notification for ${subscription.topic}`);
       }
     } catch (e: any) {
+      cli.v2(`Notification subscribe error: will stop subscribing`);
       if (e.name === "AbortError") {
         console.error(
           `Notification subscription took longer than ${fetchTimeoutMs} ms: aborted`
@@ -127,6 +136,7 @@ export async function stepNotificationsSubscribe(
         return;
       }
       console.error(e);
+      return;
     }
   }
 }
@@ -166,7 +176,7 @@ export async function stepNotificationsDelete(
         console.error(errorMessage);
         return;
       } else {
-        //nothing to do
+        cli.v1(`Unsubscribed to a notification for ${subscription.topic}`);
       }
     } catch (e: any) {
       if (e.name === "AbortError") {
