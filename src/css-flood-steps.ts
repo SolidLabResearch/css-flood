@@ -37,6 +37,11 @@ import quad = DataFactory.quad;
 import variable = DataFactory.variable;
 import literal = DataFactory.literal;
 import * as RDF from "rdf-js";
+import {
+  stepNotificationsConnectWebsockets,
+  stepNotificationsDelete,
+  stepNotificationsSubscribe,
+} from "./notification-steps";
 
 export function generateUploadData(
   httpVerb: HttpVerb,
@@ -1091,6 +1096,24 @@ export async function runNamedStep(
     case "saveAC": {
       if (cli.authCacheFile) {
         await authFetchCache.save(cli.authCacheFile);
+      }
+      break;
+    }
+    case "notificationsSubscribe": {
+      if (cli.scenario === "NOTIFICATION") {
+        await stepNotificationsSubscribe(authFetchCache, cli, counter);
+      }
+      break;
+    }
+    case "notificationsConnectWebsockets": {
+      if (cli.scenario === "NOTIFICATION") {
+        await stepNotificationsConnectWebsockets(authFetchCache, cli, counter);
+      }
+      break;
+    }
+    case "notificationsDelete": {
+      if (cli.scenario === "NOTIFICATION") {
+        await stepNotificationsDelete(authFetchCache, cli, counter);
       }
       break;
     }

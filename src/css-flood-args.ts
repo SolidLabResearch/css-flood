@@ -10,6 +10,10 @@ export type StepName =
   | "testRequest"
   | "testRequests"
   | "saveAC"
+  | "notificationsSubscribe"
+  | "notificationsConnectWebsockets"
+  // | "notificationsServeWebHooks"  //won't implement: YAGNI
+  | "notificationsDelete"
   | "flood";
 
 const ALLOWED_STEPS: StepName[] = [
@@ -19,6 +23,10 @@ const ALLOWED_STEPS: StepName[] = [
   "testRequest",
   "testRequests",
   "saveAC",
+  "notificationsSubscribe",
+  "notificationsConnectWebsockets",
+  // "notificationsServeWebHooks",
+  "notificationsDelete",
   "flood",
 ];
 
@@ -141,6 +149,7 @@ let ya = yargs(hideBin(process.argv))
       "CONTENT_TRANSLATION",
       "NO_CONTENT_TRANSLATION",
       "N3_PATCH",
+      "NOTIFICATION",
     ],
     description:
       "Fetch scenario: what sort of fetch action is this? BASIC is a simple file upload/download/delete.",
@@ -190,6 +199,39 @@ let ya = yargs(hideBin(process.argv))
       "(For scenario N3_PATCH only:) A file with the content of the target N-triples file that will be patched. This will be used to generate a random N3 PATCH.",
     demandOption: false,
   })
+  .option("notificationSubscriptionCount", {
+    group: "Notifications:",
+    type: "number",
+    default: 0,
+    description:
+      "(For scenario NOTIFICATION only:) The number of notification subscriptions to make.",
+    demandOption: false,
+  })
+  .option("notificationChannelType", {
+    group: "Notifications:",
+    type: "string",
+    choices: ["websocket", "webhook"],
+    default: "websocket",
+    description:
+      "(For scenario NOTIFICATION only:) The type of notification channel",
+    demandOption: false,
+  })
+  .option("notificationWebhookTarget", {
+    group: "Notifications:",
+    type: "string",
+    default: "http://localhost/ignore",
+    description:
+      "(For scenario NOTIFICATION only:) The webhook notification sendTo address.",
+    demandOption: false,
+  })
+  .option("notificationIgnore", {
+    group: "Notifications:",
+    type: "boolean",
+    default: true,
+    description:
+      "(For scenario NOTIFICATION only:) Ignore the notifications? (= do not connect to websocket or listen on hook sendTo address)",
+    demandOption: false,
+  })
   .epilogue(
     `Details for --steps:
     
@@ -212,6 +254,8 @@ The steps that can run are (always in this order):
 - testRequests: Do 1 request (typically a GET to download a file) for each users (back-to-back, not in parallel). 
                 This tests both the data in the authentication cache (adding missing entries), and the actual request.
 - saveAC: Save the authentication cache to file.
+- notificationsSubscribe: Subscribe to the requested amount of notifications.
+- notificationsConnectWebsockets: Connect and listen to all webhooks from the notificationsSubscribe step. (Then continue to the next step, and ignore all incomming data.)
 - flood: Run the actual "flood": generate load on the target CSS by running a number of requests in parallel.
 
 Examples:
@@ -267,6 +311,7 @@ export enum HttpVerb {
 export type FetchScenario =
   | "BASIC"
   | "N3_PATCH"
+  | "NOTIFICATION"
   | "CONTENT_TRANSLATION"
   | "NO_CONTENT_TRANSLATION";
 
@@ -293,6 +338,10 @@ export interface CliArgs {
   uploadSizeByte: number;
   scenario: FetchScenario;
   n3PatchGenFilename?: string;
+  notificationSubscriptionCount: number;
+  notificationChannelType: "websocket" | "webhook";
+  notificationWebhookTarget: string;
+  notificationIgnore: boolean;
 }
 
 export function getCliArgs(): CliArgs {
@@ -324,5 +373,12 @@ export function getCliArgs(): CliArgs {
     //TODO ignore AC steps if !cli.authenticate
     steps: <StepName[]>argv.steps,
     n3PatchGenFilename: argv.n3PatchGenFile,
+
+    notificationSubscriptionCount: argv.notificationSubscriptionCount,
+    notificationChannelType: <"websocket" | "webhook">(
+      argv.notificationChannelType
+    ),
+    notificationWebhookTarget: argv.notificationWebhookTarget,
+    notificationIgnore: argv.notificationIgnore,
   };
 }
