@@ -74,13 +74,13 @@ export async function stepNotificationsSubscribe(
 
       //TODO: the .notifications/ URL is currently hardcoded. It is cleaner to find this URL automatically.
       //      See https://communitysolidserver.github.io/CommunitySolidServer/6.x/usage/notifications/
-      const url = `${cli.cssBaseUrl}${account}/.notifications/${
+      const url = `${cli.cssBaseUrl}.notifications/${
         cli.notificationChannelType === "websocket"
           ? "WebSocketChannel2023/"
           : "WebhookChannel2023/"
       }`;
       options.headers = {
-        "Content-type": "application/application/json",
+        "Content-type": "application/ld+json",
       };
       const notificationRequest: NotificationsApiRequest = {
         "@context": ["https://www.w3.org/ns/solid/notification/v1"],
@@ -108,8 +108,12 @@ export async function stepNotificationsSubscribe(
           `target ${notificationRequest.topic} URL "${url}" failed: ${bodyError}`;
         console.error(errorMessage);
         cli.v2(
-          `Notification subscribe error. Request Body: `,
-          notificationRequest
+          `Notification subscribe error. Debug info:\n   Request Body:\n ${JSON.stringify(
+            notificationRequest,
+            null,
+            3
+          )} \n   Request Headers: `,
+          options.headers
         );
         return;
       } else {
