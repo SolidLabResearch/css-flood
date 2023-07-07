@@ -94,7 +94,7 @@ export async function stepNotificationsSubscribe(
       if (cli.notificationChannelType === "webhook") {
         notificationRequest.sendTo = cli.notificationWebhookTarget;
       }
-      options.body = notificationRequest;
+      options.body = JSON.stringify(notificationRequest);
       const res: AnyFetchResponseType = await aFetch(url, options);
 
       cli.v2(
@@ -108,7 +108,7 @@ export async function stepNotificationsSubscribe(
           `target ${notificationRequest.topic} URL "${url}" failed: ${bodyError}`;
         console.error(errorMessage);
         cli.v2(
-          `Notification subscribe error. Debug info:\n   Request Body:\n ${JSON.stringify(
+          `Notification subscribe error. Debug info:\n   Request Body: \n${JSON.stringify(
             notificationRequest,
             null,
             3
