@@ -5,8 +5,17 @@ import {
 } from "@inrupt/solid-client-authn-core";
 import { ResponseError } from "./error.js";
 import { AnyFetchResponseType, AnyFetchType } from "./generic-fetch.js";
+import fetch from "node-fetch";
 import { DurationCounter } from "./duration-counter.js";
 import { KeyPair } from "@inrupt/solid-client-authn-core/src/authenticatedFetch/dpopUtils";
+import { CliArgs } from "./css-flood-args.js";
+import {
+  AccountApiInfo,
+  accountLogin,
+  createClientCredential,
+  getAccountApiInfo,
+  getAccountInfo,
+} from "./css-accounts-api.js";
 
 function accountEmail(account: string): string {
   return `${account}@example.org`;
@@ -22,16 +31,55 @@ export interface AccessToken {
   expire: Date;
 }
 export async function createUserToken(
+  cli: CliArgs,
   cssBaseUrl: string,
   account: string,
   password: string,
   fetcher: AnyFetchType = fetch,
   durationCounter: DurationCounter | null = null
 ): Promise<UserToken> {
+  cli.v2("Creating Token (client-credential)...");
+
+  const startTime = new Date().getTime();
+  try {
+    cli.v2("Checking Account API info...");
+    const basicAccountApiInfo = await getAccountApiInfo(
+      cli,
+      `${cssBaseUrl}.account/`
+    );
+    if (basicAccountApiInfo && basicAccountApiInfo?.controls?.account?.create) {
+      cli.v2(`Account API confirms v7`);
+
+      return await createUserTokenv7(
+        cli,
+        account,
+        password,
+        fetcher,
+        basicAccountApiInfo
+      );
+    } else {
+      cli.v2(`Account API is not v7`);
+    }
+
+    cli.v2(`Assuming account API v6`);
+    return await createUserTokenv6(cli, cssBaseUrl, account, password, fetcher);
+  } finally {
+    if (durationCounter !== null) {
+      durationCounter.addDuration(new Date().getTime() - startTime);
+    }
+  }
+}
+
+export async function createUserTokenv6(
+  cli: CliArgs,
+  cssBaseUrl: string,
+  account: string,
+  password: string,
+  fetcher: AnyFetchType = fetch
+): Promise<UserToken> {
   //see https://github.com/CommunitySolidServer/CommunitySolidServer/blob/main/documentation/markdown/usage/client-credentials.md
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
-  const startTime = new Date().getTime();
   let res = null;
   let body = null;
   try {
@@ -53,22 +101,63 @@ export async function createUserToken(
     }
     throw error;
   } finally {
-    if (durationCounter !== null) {
-      durationCounter.addDuration(new Date().getTime() - startTime);
-    }
+    clearTimeout(timeoutId);
   }
   if (!res || !res.ok) {
-    // if (body.includes(`Could not create token for ${account}`)) {
-    //     //ignore
-    //     return {};
-    // }
-    console.error(`${res.status} - Creating token for ${account} failed:`);
-    console.error(body);
+    console.error(
+      `${res.status} - Creating token for ${account} failed:`,
+      body
+    );
     throw new ResponseError(res, body);
   }
 
   const { id, secret } = JSON.parse(body);
   return { id, secret };
+}
+
+export async function createUserTokenv7(
+  cli: CliArgs,
+  account: string,
+  password: string,
+  fetcher: AnyFetchType = fetch,
+  accountApiInfo: AccountApiInfo
+): Promise<UserToken> {
+  ////// Login (= get cookie) /////
+  const cookieHeader = await accountLogin(
+    cli,
+    accountApiInfo,
+    accountEmail(account),
+    "password"
+  );
+
+  ////// Get WebID from account info /////
+  const fullAccountApiInfo = await getAccountApiInfo(
+    cli,
+    accountApiInfo.controls.main.index,
+    cookieHeader
+  );
+  if (!fullAccountApiInfo) {
+    throw new Error(`Failed to fetch logged in account API info`);
+  }
+
+  cli.v2("Looking for WebID...");
+  const accountInfo = await getAccountInfo(
+    cli,
+    cookieHeader,
+    fullAccountApiInfo
+  );
+  const webId = Object.keys(accountInfo.webIds)[0];
+  cli.v2("WebID found", webId);
+
+  ////// Create Token (client credential) /////
+
+  return await createClientCredential(
+    cli,
+    cookieHeader,
+    webId,
+    account,
+    fullAccountApiInfo
+  );
 }
 
 export function stillUsableAccessToken(
@@ -80,10 +169,12 @@ export function stillUsableAccessToken(
   }
   const now = new Date().getTime();
   const expire = accessToken.expire.getTime();
+  //accessToken.expire should be 5 minutes in the future at least
   return expire > now && expire - now > deadline_s * 1000;
 }
 
 export async function getUserAuthFetch(
+  cli: CliArgs,
   cssBaseUrl: string,
   account: string,
   token: UserToken,
@@ -131,6 +222,7 @@ export async function getUserAuthFetch(
       });
 
       const body = await res.text();
+      clearTimeout(timeoutId);
       if (
         accessTokenDurationCounter !== null &&
         accessTokenDurationStart !== null
@@ -141,10 +233,6 @@ export async function getUserAuthFetch(
         accessTokenDurationStart = null;
       }
       if (!res.ok) {
-        // if (body.includes(`Could not create access token for ${account}`)) {
-        //     //ignore
-        //     return {};
-        // }
         console.error(
           `${res.status} - Creating access token for ${account} failed:`
         );
@@ -195,12 +283,6 @@ export async function getUserAuthFetch(
       accessToken.token,
       { dpopKey: accessToken.dpopKeyPair }
     );
-    // console.log(`Created Access Token using CSS token:`);
-    // console.log(`account=${account}`);
-    // console.log(`id=${id}`);
-    // console.log(`secret=${secret}`);
-    // console.log(`expiresIn=${expiresIn}`);
-    // console.log(`accessToken=${accessTokenStr}`);
 
     return [authFetch, accessToken];
   } finally {

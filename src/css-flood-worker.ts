@@ -79,6 +79,7 @@ async function main() {
           throw new Error(`SetCache called before SetCliArgs`);
         }
         authFetchCache = new AuthFetchCache(
+          cli,
           cli.cssBaseUrl,
           cli.authenticate,
           cli.authenticateCache,

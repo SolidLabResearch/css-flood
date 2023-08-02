@@ -13,6 +13,7 @@ import {
 import { DurationCounter } from "./duration-counter.js";
 import { promises as fs } from "fs";
 import * as jose from "jose";
+import { CliArgs } from "./css-flood-args.js";
 
 export function fromNow(d?: Date | null): null | string {
   if (!d) {
@@ -40,6 +41,7 @@ export interface AuthFetchCacheStats {
 }
 
 export class AuthFetchCache {
+  cli: CliArgs;
   cssBaseUrl: string;
   authenticateCache: "none" | "token" | "all" = "none";
   authenticate: boolean = false;
@@ -61,11 +63,13 @@ export class AuthFetchCache {
   fetcher: AnyFetchType;
 
   constructor(
-    cssBaseUrl: string,
+    cli: CliArgs,
+    cssBaseUrl: string, //there might be multiple css servers, this cache is for one specific server
     authenticate: boolean,
     authenticateCache: "none" | "token" | "all",
     fetcher: AnyFetchType = es6fetch
   ) {
+    this.cli = cli;
     this.cssBaseUrl = cssBaseUrl;
     this.authenticate = authenticate;
     this.authenticateCache = authenticateCache;
@@ -97,6 +101,7 @@ export class AuthFetchCache {
 
     if (!userToken) {
       userToken = await createUserToken(
+        this.cli,
         this.cssBaseUrl,
         account,
         "password",
@@ -107,6 +112,7 @@ export class AuthFetchCache {
     }
     if (!theFetch) {
       [theFetch, accessToken] = await getUserAuthFetch(
+        this.cli,
         this.cssBaseUrl,
         account,
         userToken,
@@ -173,6 +179,7 @@ export class AuthFetchCache {
           }/${userCount}... fetching user token...\r`
         );
         token = await createUserToken(
+          this.cli,
           this.cssBaseUrl,
           account,
           "password",
@@ -198,6 +205,7 @@ export class AuthFetchCache {
           }/${userCount}... checking access token ${atInfo}...\r`
         );
         const [fetch, accessToken] = await getUserAuthFetch(
+          this.cli,
           this.cssBaseUrl,
           account,
           token,

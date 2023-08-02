@@ -40,6 +40,7 @@ async function main() {
   const fetcher: AnyFetchType = cli.useNodeFetch ? nodeFetch : es6fetch;
 
   const authFetchCache = new AuthFetchCache(
+    cli,
     cli.cssBaseUrl,
     cli.authenticate,
     cli.authenticateCache,
