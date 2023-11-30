@@ -1,5 +1,12 @@
 # CSS Flood
 
+This tool is now part of: https://github.com/SolidLabResearch/solid-perftest-tools
+
+Use the new repo instead of this one. This repo is only left for archival purposes.
+
+---
+
+
 ## What?
 
 A CLI tool to flood a CSS with requests, for testing/benchmarking.
